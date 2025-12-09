@@ -1,9 +1,10 @@
 
+
 import React, { useState, useEffect } from 'react';
-import { Layout, Dumbbell, BookOpen, Trophy, PlayCircle, Menu, X, BrainCircuit, Globe, ChevronDown, ChevronRight, Check, Save, Trash2, Plus, Users, ArrowLeft, ClipboardList, Calendar, Play, Circle, Flag } from 'lucide-react';
+import { Layout, Dumbbell, BookOpen, Trophy, PlayCircle, Menu, X, BrainCircuit, Globe, ChevronDown, ChevronRight, Check, Save, Trash2, Plus, Users, ArrowLeft, ClipboardList, Calendar, Play, Circle, Flag, School, GraduationCap, UserPlus } from 'lucide-react';
 import ChatInterface from './components/ChatInterface';
 import TacticsBoard from './components/TacticsBoard';
-import { ViewState, SkillCategory, TacticMode, Language, SavedPlan, SkillItem, ManagedLeague, ManagedTeam, ManagedPlayer, ManagedMatch, MatchPlayerStats } from './types';
+import { ViewState, SkillCategory, TacticMode, Language, SavedPlan, SkillItem, ManagedLeague, ManagedTeam, ManagedPlayer, ManagedMatch, MatchPlayerStats, School as SchoolType, SchoolClass, Student, SchoolGrade } from './types';
 import { TRANSLATIONS, TACTIC_CATEGORIES, SKILL_LIBRARY } from './constants';
 import { generatePlan, analyzeTactic, generateScoutingReport } from './services/gemini';
 import ReactMarkdown from 'react-markdown';
@@ -39,6 +40,12 @@ const App = () => {
   const [activeLeagueTab, setActiveLeagueTab] = useState<'teams' | 'matches'>('teams');
   const [scoutingReport, setScoutingReport] = useState<string>('');
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+
+  // School Management State
+  const [schools, setSchools] = useState<SchoolType[]>([]);
+  const [activeSchoolId, setActiveSchoolId] = useState<string | null>(null);
+  const [activeGradeId, setActiveGradeId] = useState<string | null>(null);
+  const [activeClassId, setActiveClassId] = useState<string | null>(null);
   
   // Form states
   const [isAddLeagueOpen, setIsAddLeagueOpen] = useState(false);
@@ -46,15 +53,27 @@ const App = () => {
   const [isAddPlayerOpen, setIsAddPlayerOpen] = useState(false);
   const [isAddMatchOpen, setIsAddMatchOpen] = useState(false);
   
+  // School Form States
+  const [isAddSchoolOpen, setIsAddSchoolOpen] = useState(false);
+  const [isAddGradeOpen, setIsAddGradeOpen] = useState(false);
+  const [isAddClassOpen, setIsAddClassOpen] = useState(false);
+  const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
+
+  // Form Inputs
   const [newLeagueName, setNewLeagueName] = useState('');
   const [newLeagueSeason, setNewLeagueSeason] = useState('');
-  
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamCoach, setNewTeamCoach] = useState('');
-  
   const [newPlayer, setNewPlayer] = useState({ name: '', number: '', position: 'G', height: '', weight: '', pts: '0', reb: '0', ast: '0' });
-
   const [newMatch, setNewMatch] = useState({ homeTeamId: '', awayTeamId: '', date: '' });
+
+  // School Form Inputs
+  const [newSchoolName, setNewSchoolName] = useState('');
+  const [newSchoolRegion, setNewSchoolRegion] = useState('');
+  const [newGradeName, setNewGradeName] = useState(''); // e.g., Enrollment Year
+  const [newClassName, setNewClassName] = useState('');
+  const [newStudent, setNewStudent] = useState({ name: '', age: '', height: '', weight: '', parentName: '', parentPhone: '' });
+
 
   // Training state
   const [trainingConfig, setTrainingConfig] = useState({ days: '7', level: 'Intermediate', focus: 'Shooting', age: '18' });
@@ -94,15 +113,26 @@ const App = () => {
     }
   }, [activeTacticMode, activeCategoryId, selectedTacticId, language]); 
 
-  // Load Saved Plans & Leagues
+  // Load Saved Data
   useEffect(() => {
-    const saved = localStorage.getItem('gemini_training_plans');
-    if (saved) {
-      setSavedPlans(JSON.parse(saved));
-    }
+    const savedPlans = localStorage.getItem('gemini_training_plans');
+    if (savedPlans) setSavedPlans(JSON.parse(savedPlans));
+
     const savedLeagues = localStorage.getItem('gemini_managed_leagues');
-    if (savedLeagues) {
-      setLeagues(JSON.parse(savedLeagues));
+    if (savedLeagues) setLeagues(JSON.parse(savedLeagues));
+
+    const savedSchools = localStorage.getItem('gemini_managed_schools');
+    if (savedSchools) {
+      // Basic check if data is in new format (has grades array)
+      const parsed = JSON.parse(savedSchools);
+      if (parsed.length > 0 && !parsed[0].grades && parsed[0].classes) {
+         // Old format detected, reset or handle migration. For this demo, we'll just respect new format
+         // or you could wipe it: localStorage.removeItem('gemini_managed_schools'); setSchools([]);
+         // Let's assume user starts fresh or manually clear if conflicts occur
+         setSchools(parsed);
+      } else {
+         setSchools(parsed);
+      }
     }
   }, []);
 
@@ -133,7 +163,41 @@ const App = () => {
     localStorage.setItem('gemini_managed_leagues', JSON.stringify(updatedLeagues));
   };
 
-  // League Management Functions
+  const saveSchools = (updatedSchools: SchoolType[]) => {
+    setSchools(updatedSchools);
+    localStorage.setItem('gemini_managed_schools', JSON.stringify(updatedSchools));
+  };
+
+  // --- Helper: Calculate Grade Level ---
+  const calculateGradeLevel = (entryName: string, lang: Language): string => {
+    // Extract first 4 digits
+    const match = entryName.match(/\d{4}/);
+    if (!match) return '';
+
+    const entryYear = parseInt(match[0], 10);
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 1-12
+
+    // If it's Sept or later, we are in the academic year starting 'currentYear'.
+    // If before Sept, we are in the academic year starting 'currentYear - 1'.
+    // Grade 1 starts in Sept of entryYear.
+    let academicYearStart = currentYear;
+    if (currentMonth < 9) {
+      academicYearStart = currentYear - 1;
+    }
+
+    const yearsDiff = academicYearStart - entryYear;
+    // Grade = yearsDiff + 1 (0 diff = 1st Grade)
+    const gradeLevel = yearsDiff + 1;
+
+    if (gradeLevel < 1) return lang === 'zh' ? '学前' : 'Pre-K';
+    if (gradeLevel > 12) return lang === 'zh' ? '已毕业' : 'Graduated';
+
+    return lang === 'zh' ? `${gradeLevel}年级` : `Grade ${gradeLevel}`;
+  };
+
+  // --- League Management Functions ---
   const addLeague = () => {
     if (!newLeagueName) return;
     const newLeague: ManagedLeague = {
@@ -313,6 +377,161 @@ const App = () => {
     setActiveMatchId(null);
   };
 
+  // --- School Management Functions ---
+  const addSchool = () => {
+    if (!newSchoolName) return;
+    const newSchool: SchoolType = {
+      id: Date.now().toString(),
+      name: newSchoolName,
+      region: newSchoolRegion,
+      grades: []
+    };
+    saveSchools([...schools, newSchool]);
+    setNewSchoolName('');
+    setNewSchoolRegion('');
+    setIsAddSchoolOpen(false);
+  };
+
+  const deleteSchool = (id: string) => {
+    saveSchools(schools.filter(s => s.id !== id));
+    if (activeSchoolId === id) {
+       setActiveSchoolId(null);
+       setActiveGradeId(null);
+       setActiveClassId(null);
+    }
+  };
+
+  const addGrade = () => {
+    if (!newGradeName || !activeSchoolId) return;
+    const newGrade: SchoolGrade = {
+      id: Date.now().toString(),
+      name: newGradeName,
+      classes: []
+    };
+    const updatedSchools = schools.map(s => {
+      if (s.id === activeSchoolId) {
+        return { ...s, grades: [...(s.grades || []), newGrade] };
+      }
+      return s;
+    });
+    saveSchools(updatedSchools);
+    setNewGradeName('');
+    setIsAddGradeOpen(false);
+  };
+
+  const deleteGrade = (schoolId: string, gradeId: string) => {
+    const updatedSchools = schools.map(s => {
+      if (s.id === schoolId) {
+        return { ...s, grades: s.grades.filter(g => g.id !== gradeId) };
+      }
+      return s;
+    });
+    saveSchools(updatedSchools);
+    if (activeGradeId === gradeId) {
+      setActiveGradeId(null);
+      setActiveClassId(null);
+    }
+  };
+
+  const addClass = () => {
+    if (!newClassName || !activeSchoolId || !activeGradeId) return;
+    const newClass: SchoolClass = {
+      id: Date.now().toString(),
+      name: newClassName,
+      students: []
+    };
+    const updatedSchools = schools.map(s => {
+      if (s.id === activeSchoolId) {
+        const updatedGrades = s.grades.map(g => {
+          if (g.id === activeGradeId) {
+            return { ...g, classes: [...g.classes, newClass] };
+          }
+          return g;
+        });
+        return { ...s, grades: updatedGrades };
+      }
+      return s;
+    });
+    saveSchools(updatedSchools);
+    setNewClassName('');
+    setIsAddClassOpen(false);
+  };
+
+  const deleteClass = (schoolId: string, gradeId: string, classId: string) => {
+    const updatedSchools = schools.map(s => {
+      if (s.id === schoolId) {
+        const updatedGrades = s.grades.map(g => {
+          if (g.id === gradeId) {
+            return { ...g, classes: g.classes.filter(c => c.id !== classId) };
+          }
+          return g;
+        });
+        return { ...s, grades: updatedGrades };
+      }
+      return s;
+    });
+    saveSchools(updatedSchools);
+    if (activeClassId === classId) setActiveClassId(null);
+  };
+
+  const addStudent = () => {
+    if (!newStudent.name || !activeSchoolId || !activeGradeId || !activeClassId) return;
+    const student: Student = {
+      id: Date.now().toString(),
+      name: newStudent.name,
+      age: newStudent.age,
+      height: newStudent.height,
+      weight: newStudent.weight,
+      parentName: newStudent.parentName,
+      parentPhone: newStudent.parentPhone
+    };
+
+    const updatedSchools = schools.map(s => {
+      if (s.id === activeSchoolId) {
+        const updatedGrades = s.grades.map(g => {
+          if (g.id === activeGradeId) {
+             const updatedClasses = g.classes.map(c => {
+               if (c.id === activeClassId) {
+                 return { ...c, students: [...c.students, student] };
+               }
+               return c;
+             });
+             return { ...g, classes: updatedClasses };
+          }
+          return g;
+        });
+        return { ...s, grades: updatedGrades };
+      }
+      return s;
+    });
+    saveSchools(updatedSchools);
+    setNewStudent({ name: '', age: '', height: '', weight: '', parentName: '', parentPhone: '' });
+    setIsAddStudentOpen(false);
+  };
+
+  const deleteStudent = (schoolId: string, gradeId: string, classId: string, studentId: string) => {
+    const updatedSchools = schools.map(s => {
+      if (s.id === schoolId) {
+        const updatedGrades = s.grades.map(g => {
+           if (g.id === gradeId) {
+             const updatedClasses = g.classes.map(c => {
+               if (c.id === classId) {
+                 return { ...c, students: c.students.filter(st => st.id !== studentId) };
+               }
+               return c;
+             });
+             return { ...g, classes: updatedClasses };
+           }
+           return g;
+        });
+        return { ...s, grades: updatedGrades };
+      }
+      return s;
+    });
+    saveSchools(updatedSchools);
+  };
+
+
   const handleGenerateScout = async (player: ManagedPlayer) => {
     setActivePlayerId(player.id);
     setIsGeneratingReport(true);
@@ -359,7 +578,11 @@ const App = () => {
       onClick={() => {
         setCurrentView(view);
         setIsMobileMenuOpen(false);
-        setActiveLeagueId(null); // Reset league view on nav
+        // Reset navigation states when switching top-level views
+        setActiveLeagueId(null); 
+        setActiveSchoolId(null);
+        setActiveGradeId(null);
+        setActiveClassId(null);
       }}
       className={`flex items-center gap-3 w-full p-3 rounded-lg transition-all ${
         currentView === view 
@@ -569,6 +792,349 @@ const App = () => {
     );
   };
 
+  const renderSchool = () => {
+    // Level 4: Student Detail / List (Deepest)
+    if (activeClassId && activeGradeId && activeSchoolId) {
+      const activeSchool = schools.find(s => s.id === activeSchoolId);
+      const activeGrade = activeSchool?.grades?.find(g => g.id === activeGradeId);
+      const activeClass = activeGrade?.classes.find(c => c.id === activeClassId);
+
+      if (!activeClass) return null;
+
+      return (
+        <div className="flex flex-col h-full gap-6">
+           <div className="flex items-center justify-between">
+            <button onClick={() => setActiveClassId(null)} className="flex items-center gap-2 text-slate-400 hover:text-white">
+              <ArrowLeft size={18} /> {t.common.back}
+            </button>
+            <div className="text-slate-500 text-sm">{activeSchool?.name} / {activeGrade?.name}</div>
+          </div>
+
+          <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-xl">
+             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+               <div>
+                 <h2 className="text-2xl font-bold text-white mb-1">{activeClass.name}</h2>
+                 <p className="text-slate-400 text-sm">{activeClass.students.length} Students</p>
+               </div>
+               <button 
+                onClick={() => setIsAddStudentOpen(true)}
+                className="bg-court-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"
+               >
+                 <UserPlus size={18} /> {t.school.createStudent}
+               </button>
+             </div>
+
+             {/* Student List */}
+             <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-slate-300">
+                  <thead className="bg-slate-900/50 text-slate-500 uppercase font-medium">
+                    <tr>
+                      <th className="p-3">{t.school.studentName}</th>
+                      <th className="p-3">{t.school.age}</th>
+                      <th className="p-3">{t.school.height}</th>
+                      <th className="p-3">{t.school.parentName}</th>
+                      <th className="p-3">{t.school.parentPhone}</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700">
+                     {activeClass.students.length === 0 ? (
+                       <tr><td colSpan={6} className="p-8 text-center text-slate-500">{t.school.noStudents}</td></tr>
+                     ) : (
+                       activeClass.students.map(student => (
+                         <tr key={student.id} className="hover:bg-slate-700/50 transition-colors">
+                            <td className="p-3 font-bold text-white">{student.name}</td>
+                            <td className="p-3">{student.age}</td>
+                            <td className="p-3">{student.height}</td>
+                            <td className="p-3 text-court-orange">{student.parentName || '-'}</td>
+                            <td className="p-3 font-mono">{student.parentPhone || '-'}</td>
+                            <td className="p-3 text-right">
+                              <button 
+                                onClick={() => deleteStudent(activeSchoolId!, activeGradeId!, activeClassId!, student.id)}
+                                className="text-slate-500 hover:text-red-500 p-1"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                         </tr>
+                       ))
+                     )}
+                  </tbody>
+                </table>
+             </div>
+          </div>
+
+          {/* Add Student Modal */}
+          {isAddStudentOpen && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+              <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700">
+                 <h3 className="text-xl font-bold text-white mb-4">{t.school.createStudent}</h3>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <label className="block text-xs text-slate-400 mb-1">{t.school.studentName}</label>
+                      <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newStudent.name} onChange={e => setNewStudent({...newStudent, name: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">{t.school.age}</label>
+                      <input type="number" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newStudent.age} onChange={e => setNewStudent({...newStudent, age: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">{t.school.height}</label>
+                      <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newStudent.height} onChange={e => setNewStudent({...newStudent, height: e.target.value})} />
+                    </div>
+                    
+                    {/* Dad's Cup Fields */}
+                    <div className="col-span-2 border-t border-slate-700 pt-3 mt-1">
+                      <h4 className="text-court-orange text-xs font-bold uppercase mb-2">{t.school.dadsCupReady}</h4>
+                      <label className="block text-xs text-slate-400 mb-1">{t.school.parentName}</label>
+                      <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white mb-3" value={newStudent.parentName} onChange={e => setNewStudent({...newStudent, parentName: e.target.value})} />
+                      
+                      <label className="block text-xs text-slate-400 mb-1">{t.school.parentPhone}</label>
+                      <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newStudent.parentPhone} onChange={e => setNewStudent({...newStudent, parentPhone: e.target.value})} />
+                    </div>
+                 </div>
+                 <div className="flex justify-end gap-3 mt-6">
+                    <button onClick={() => setIsAddStudentOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
+                    <button onClick={addStudent} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600">{t.common.save}</button>
+                 </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Level 3: Grade Detail / Classes List
+    if (activeGradeId && activeSchoolId) {
+      const school = schools.find(s => s.id === activeSchoolId);
+      const grade = school?.grades?.find(g => g.id === activeGradeId);
+      
+      if (!school || !grade) return null;
+
+      return (
+        <div className="flex flex-col h-full gap-6">
+           <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 flex justify-between items-center shadow-lg">
+             <div className="flex items-center gap-4">
+               <button onClick={() => setActiveGradeId(null)} className="text-slate-400 hover:text-white"><ArrowLeft /></button>
+               <div>
+                  <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+                    {grade.name}
+                    <span className="text-lg text-court-orange font-normal bg-slate-900 px-3 py-1 rounded-full border border-slate-700">
+                      {calculateGradeLevel(grade.name, language)}
+                    </span>
+                  </h2>
+                  <p className="text-slate-400 text-sm">{school.name}</p>
+               </div>
+             </div>
+             <button 
+                onClick={() => setIsAddClassOpen(true)}
+                className="bg-court-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"
+               >
+                 <Plus size={18} /> {t.school.createClass}
+               </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+               {grade.classes.map(cls => (
+                 <button
+                    key={cls.id}
+                    onClick={() => setActiveClassId(cls.id)}
+                    className="bg-slate-800 p-4 rounded-xl text-left hover:bg-slate-700 transition-all border border-slate-700 hover:border-court-orange group relative"
+                 >
+                    <div className="font-bold text-white text-lg group-hover:text-court-orange truncate">{cls.name}</div>
+                    <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-900 w-fit px-2 py-1 rounded mt-2">
+                       <Users size={12} /> {cls.students.length}
+                    </div>
+                    <div 
+                      onClick={(e) => { e.stopPropagation(); deleteClass(school.id, grade.id, cls.id); }}
+                      className="absolute top-2 right-2 text-slate-600 hover:text-red-500 p-1"
+                    >
+                      <Trash2 size={14} />
+                    </div>
+                 </button>
+               ))}
+               <button 
+                 onClick={() => setIsAddClassOpen(true)}
+                 className="bg-slate-800/50 border-2 border-dashed border-slate-700 p-4 rounded-xl flex flex-col items-center justify-center text-slate-500 hover:text-court-orange hover:border-court-orange transition-all min-h-[120px]"
+               >
+                 <Plus size={32} />
+                 <span className="text-sm mt-2 font-bold">{t.school.createClass}</span>
+               </button>
+             </div>
+          </div>
+
+           {/* Add Class Modal */}
+           {isAddClassOpen && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+               <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700">
+                  <h3 className="text-xl font-bold text-white mb-4">{t.school.createClass}</h3>
+                  <div className="space-y-4">
+                     <div>
+                       <label className="block text-sm text-slate-400 mb-1">{t.school.className}</label>
+                       <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newClassName} onChange={e => setNewClassName(e.target.value)} />
+                     </div>
+                  </div>
+                  <div className="flex justify-end gap-3 mt-6">
+                     <button onClick={() => setIsAddClassOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
+                     <button onClick={addClass} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600">{t.common.save}</button>
+                  </div>
+               </div>
+            </div>
+           )}
+        </div>
+      );
+    }
+
+    // Level 2: School Detail / Grade List
+    if (activeSchoolId) {
+      const school = schools.find(s => s.id === activeSchoolId);
+      if (!school) return null;
+
+      return (
+        <div className="flex flex-col h-full gap-6">
+           <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 flex justify-between items-center shadow-lg">
+             <div className="flex items-center gap-4">
+               <button onClick={() => setActiveSchoolId(null)} className="text-slate-400 hover:text-white"><ArrowLeft /></button>
+               <div>
+                  <h2 className="text-2xl font-bold text-white">{school.name}</h2>
+                  <p className="text-slate-400 text-sm">{school.region}</p>
+               </div>
+             </div>
+             <button 
+                onClick={() => setIsAddGradeOpen(true)}
+                className="bg-court-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"
+               >
+                 <Plus size={18} /> {t.school.createGrade}
+               </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+               {(school.grades || []).map(grade => (
+                 <button
+                    key={grade.id}
+                    onClick={() => setActiveGradeId(grade.id)}
+                    className="bg-slate-800 p-4 rounded-xl text-left hover:bg-slate-700 transition-all border border-slate-700 hover:border-court-orange group relative flex items-center justify-between"
+                 >
+                    <div>
+                      <div className="font-bold text-white text-lg group-hover:text-court-orange flex items-center gap-2">
+                        {grade.name}
+                      </div>
+                      <div className="mt-1 inline-block text-xs font-semibold text-slate-300 bg-slate-900/50 px-2 py-0.5 rounded border border-slate-700/50">
+                        {calculateGradeLevel(grade.name, language)}
+                      </div>
+                      <div className="text-sm text-slate-500 mt-2">{grade.classes.length} Classes</div>
+                    </div>
+                    <div 
+                      onClick={(e) => { e.stopPropagation(); deleteGrade(school.id, grade.id); }}
+                      className="text-slate-600 hover:text-red-500 p-2"
+                    >
+                      <Trash2 size={18} />
+                    </div>
+                 </button>
+               ))}
+               {(school.grades || []).length === 0 && (
+                   <div className="col-span-full p-8 text-center text-slate-500 border border-dashed border-slate-700 rounded-xl">
+                      {t.school.noGrades}
+                   </div>
+               )}
+             </div>
+          </div>
+
+           {/* Add Grade Modal */}
+           {isAddGradeOpen && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+               <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700">
+                  <h3 className="text-xl font-bold text-white mb-4">{t.school.createGrade}</h3>
+                  <div className="space-y-4">
+                     <div>
+                       <label className="block text-sm text-slate-400 mb-1">{t.school.gradeName}</label>
+                       <input type="text" placeholder="e.g. 2022 Entry / Grade 3" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newGradeName} onChange={e => setNewGradeName(e.target.value)} />
+                       <p className="text-xs text-slate-500 mt-1">Tip: Include the year (e.g. "2023") to auto-calculate grade level.</p>
+                     </div>
+                  </div>
+                  <div className="flex justify-end gap-3 mt-6">
+                     <button onClick={() => setIsAddGradeOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
+                     <button onClick={addGrade} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600">{t.common.save}</button>
+                  </div>
+               </div>
+            </div>
+           )}
+        </div>
+      );
+    }
+
+    // Level 1: Schools List
+    return (
+      <div className="flex flex-col h-full gap-6">
+         <div className="flex justify-between items-center bg-slate-800 p-6 rounded-xl border border-slate-700">
+           <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+             <School className="text-court-orange" /> {t.school.title}
+           </h2>
+           <button 
+             onClick={() => setIsAddSchoolOpen(true)}
+             className="bg-court-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg"
+           >
+             <Plus size={18} /> {t.school.createSchool}
+           </button>
+         </div>
+
+         <div className="flex-1 overflow-y-auto space-y-4">
+            {schools.length === 0 ? (
+               <div className="flex flex-col items-center justify-center h-64 text-slate-500 bg-slate-800/50 rounded-xl border border-slate-700 border-dashed">
+                 <School size={48} className="mb-4 opacity-20" />
+                 <p>{t.school.noSchools}</p>
+               </div>
+            ) : (
+               schools.map(school => (
+                  <div key={school.id} className="bg-slate-800 border border-slate-700 rounded-xl p-4 hover:border-slate-500 transition-colors">
+                     <div className="flex justify-between items-start">
+                        <button onClick={() => setActiveSchoolId(school.id)} className="text-left group flex-1">
+                           <h3 className="text-xl font-bold text-white group-hover:text-court-orange transition-colors">{school.name}</h3>
+                           <p className="text-sm text-slate-400 mb-2">{school.region}</p>
+                           <div className="flex gap-4">
+                              <span className="text-xs bg-slate-900 text-slate-300 px-2 py-1 rounded border border-slate-700 flex items-center gap-1">
+                                <Flag size={12} /> {(school.grades || []).length} Grades
+                              </span>
+                           </div>
+                        </button>
+                        <div className="flex items-center gap-2">
+                           <button onClick={() => setActiveSchoolId(school.id)} className="text-sm text-court-orange hover:text-white border border-slate-700 hover:bg-slate-700 px-3 py-1 rounded">Manage</button>
+                           <button onClick={() => deleteSchool(school.id)} className="text-slate-500 hover:text-red-500 p-2"><Trash2 size={18} /></button>
+                        </div>
+                     </div>
+                  </div>
+               ))
+            )}
+         </div>
+
+         {/* Add School Modal */}
+         {isAddSchoolOpen && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+               <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700 shadow-2xl">
+                  <h3 className="text-xl font-bold text-white mb-4">{t.school.createSchool}</h3>
+                  <div className="space-y-4">
+                     <div>
+                       <label className="block text-sm text-slate-400 mb-1">{t.school.schoolName}</label>
+                       <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newSchoolName} onChange={e => setNewSchoolName(e.target.value)} />
+                     </div>
+                     <div>
+                       <label className="block text-sm text-slate-400 mb-1">{t.school.region}</label>
+                       <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newSchoolRegion} onChange={e => setNewSchoolRegion(e.target.value)} />
+                     </div>
+                  </div>
+                  <div className="flex justify-end gap-3 mt-6">
+                     <button onClick={() => setIsAddSchoolOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
+                     <button onClick={addSchool} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600">{t.common.save}</button>
+                  </div>
+               </div>
+            </div>
+         )}
+      </div>
+    );
+  };
+
   const renderTactics = () => {
     // Find active category object
     const currentCategory = TACTIC_CATEGORIES.find(c => c.id === activeCategoryId) || TACTIC_CATEGORIES[0];
@@ -677,282 +1243,229 @@ const App = () => {
   };
 
   const renderLeague = () => {
-    // Level 4: Live Match Tracker (Full Screen Overlay)
+    // Level 4: Live Match Tracker
     if (activeMatchId && activeLeagueId) {
-      const activeLeague = leagues.find(l => l.id === activeLeagueId);
-      const match = activeLeague?.matches?.find(m => m.id === activeMatchId);
-      
-      if (!activeLeague || !match) return null;
+      const league = leagues.find(l => l.id === activeLeagueId);
+      const match = league?.matches.find(m => m.id === activeMatchId);
+      const homeTeam = league?.teams.find(t => t.id === match?.homeTeamId);
+      const awayTeam = league?.teams.find(t => t.id === match?.awayTeamId);
 
-      const homeTeam = activeLeague.teams.find(t => t.id === match.homeTeamId);
-      const awayTeam = activeLeague.teams.find(t => t.id === match.awayTeamId);
+      if (!match || !homeTeam || !awayTeam) return null;
+
+      const getPlayerName = (id: string) => {
+        const p = homeTeam.players.find(p => p.id === id) || awayTeam.players.find(p => p.id === id);
+        return p?.name || 'Unknown';
+      };
 
       return (
-        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
-           {/* Live Header */}
-           <div className="bg-slate-900 p-4 border-b border-slate-800 flex justify-between items-center shadow-md">
-             <button onClick={() => setActiveMatchId(null)} className="text-slate-400 hover:text-white flex items-center gap-2">
-               <ArrowLeft /> {t.common.back}
+        <div className="flex flex-col h-full gap-6">
+           {/* Header */}
+           <div className="flex items-center justify-between bg-slate-800 p-4 rounded-xl border border-slate-700">
+             <button onClick={() => setActiveMatchId(null)} className="flex items-center gap-2 text-slate-400 hover:text-white">
+                <ArrowLeft size={18} /> {t.common.back}
              </button>
-             <div className="flex items-center gap-8">
-               <div className="text-right">
-                 <div className="text-2xl font-bold text-white">{match.homeScore}</div>
-                 <div className="text-xs text-court-orange font-bold uppercase">{homeTeam?.name}</div>
-               </div>
-               <div className="text-slate-500 text-sm font-bold">VS</div>
-               <div className="text-left">
-                 <div className="text-2xl font-bold text-white">{match.awayScore}</div>
-                 <div className="text-xs text-white font-bold uppercase">{awayTeam?.name}</div>
-               </div>
+             <div className="text-xl font-bold text-white flex gap-4 items-center">
+                <span className="text-right w-32 truncate">{homeTeam.name}</span>
+                <span className="text-3xl bg-black px-4 py-1 rounded font-mono text-court-orange">{match.homeScore}</span>
+                <span className="text-slate-500 text-sm">vs</span>
+                <span className="text-3xl bg-black px-4 py-1 rounded font-mono text-court-orange">{match.awayScore}</span>
+                <span className="text-left w-32 truncate">{awayTeam.name}</span>
              </div>
-             <button 
-                onClick={() => finishMatch(activeLeagueId, match.id)}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm font-bold"
-             >
-               {t.league.match.finish}
-             </button>
+             <div className="flex gap-2">
+                {match.status !== 'Final' && (
+                  <button onClick={() => finishMatch(activeLeagueId!, activeMatchId!)} className="bg-red-600 text-white px-3 py-1 rounded text-sm font-bold">{t.league.match.finish}</button>
+                )}
+                <div className="px-3 py-1 bg-slate-900 rounded text-sm text-court-orange border border-court-orange">{t.league.match.status[match.status.toLowerCase() as keyof typeof t.league.match.status]}</div>
+             </div>
            </div>
 
-           {/* Game Controls */}
-           <div className="flex-1 overflow-y-auto p-4 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-             {/* Home Team Controls */}
-             <div className="bg-slate-900 rounded-xl border border-slate-800 p-4">
-                <h3 className="text-court-orange font-bold mb-4 border-b border-slate-800 pb-2">{t.league.match.home}: {homeTeam?.name}</h3>
-                <div className="space-y-4">
-                  {homeTeam?.players.map(player => {
-                    const stats = match.stats[player.id] || { pts: 0, reb: 0, ast: 0, fouls: 0 };
-                    return (
-                      <div key={player.id} className="bg-slate-800 p-3 rounded-lg">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="font-bold text-white">#{player.number} {player.name}</span>
-                          <span className="text-xs text-slate-400">{stats.pts}pts / {stats.reb}reb / {stats.ast}ast</span>
-                        </div>
-                        <div className="grid grid-cols-4 gap-2">
-                          <button onClick={() => updateMatchStat(activeLeagueId, match.id, player.id, 'pts', 1)} className="bg-slate-700 hover:bg-slate-600 text-white text-xs py-2 rounded">+1</button>
-                          <button onClick={() => updateMatchStat(activeLeagueId, match.id, player.id, 'pts', 2)} className="bg-slate-700 hover:bg-slate-600 text-white text-xs py-2 rounded">+2</button>
-                          <button onClick={() => updateMatchStat(activeLeagueId, match.id, player.id, 'pts', 3)} className="bg-slate-700 hover:bg-slate-600 text-white text-xs py-2 rounded">+3</button>
-                          <div className="flex flex-col gap-1">
-                             <button onClick={() => updateMatchStat(activeLeagueId, match.id, player.id, 'reb', 1)} className="bg-blue-900/50 hover:bg-blue-800 text-blue-200 text-[10px] py-1 rounded">REB</button>
-                             <button onClick={() => updateMatchStat(activeLeagueId, match.id, player.id, 'ast', 1)} className="bg-green-900/50 hover:bg-green-800 text-green-200 text-[10px] py-1 rounded">AST</button>
+           {/* Controls */}
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 overflow-y-auto">
+              {[homeTeam, awayTeam].map((team, idx) => (
+                <div key={team.id} className="bg-slate-800 rounded-xl border border-slate-700 p-4 flex flex-col">
+                   <h3 className={`text-lg font-bold mb-4 border-b border-slate-700 pb-2 ${idx === 0 ? 'text-blue-400' : 'text-red-400'}`}>{team.name}</h3>
+                   <div className="space-y-2 flex-1 overflow-y-auto">
+                     {team.players.map(player => {
+                        const stats = match.stats[player.id] || { pts: 0, reb: 0, ast: 0, fouls: 0 };
+                        return (
+                          <div key={player.id} className="flex items-center justify-between bg-slate-900/50 p-2 rounded">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-sm text-white">{player.name} <span className="text-slate-500 text-xs">#{player.number}</span></span>
+                              <div className="text-xs text-slate-400 flex gap-2">
+                                <span>{stats.pts} Pts</span>
+                                <span>{stats.reb} Reb</span>
+                                <span>{stats.ast} Ast</span>
+                                <span className={stats.fouls >= 5 ? 'text-red-500' : ''}>{stats.fouls} PF</span>
+                              </div>
+                            </div>
+                            {match.status === 'Live' && (
+                               <div className="flex gap-1">
+                                 <button onClick={() => updateMatchStat(activeLeagueId!, activeMatchId!, player.id, 'pts', 2)} className="bg-slate-700 hover:bg-court-orange text-white text-xs px-2 py-1 rounded transition-colors">+2</button>
+                                 <button onClick={() => updateMatchStat(activeLeagueId!, activeMatchId!, player.id, 'pts', 3)} className="bg-slate-700 hover:bg-court-orange text-white text-xs px-2 py-1 rounded transition-colors">+3</button>
+                                 <button onClick={() => updateMatchStat(activeLeagueId!, activeMatchId!, player.id, 'reb', 1)} className="bg-slate-700 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded transition-colors">Reb</button>
+                                 <button onClick={() => updateMatchStat(activeLeagueId!, activeMatchId!, player.id, 'ast', 1)} className="bg-slate-700 hover:bg-green-600 text-white text-xs px-2 py-1 rounded transition-colors">Ast</button>
+                               </div>
+                            )}
                           </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                        )
+                     })}
+                   </div>
                 </div>
-             </div>
-
-             {/* Away Team Controls */}
-             <div className="bg-slate-900 rounded-xl border border-slate-800 p-4">
-                <h3 className="text-white font-bold mb-4 border-b border-slate-800 pb-2">{t.league.match.away}: {awayTeam?.name}</h3>
-                <div className="space-y-4">
-                  {awayTeam?.players.map(player => {
-                    const stats = match.stats[player.id] || { pts: 0, reb: 0, ast: 0, fouls: 0 };
-                    return (
-                      <div key={player.id} className="bg-slate-800 p-3 rounded-lg">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="font-bold text-white">#{player.number} {player.name}</span>
-                          <span className="text-xs text-slate-400">{stats.pts}pts / {stats.reb}reb / {stats.ast}ast</span>
-                        </div>
-                        <div className="grid grid-cols-4 gap-2">
-                          <button onClick={() => updateMatchStat(activeLeagueId, match.id, player.id, 'pts', 1)} className="bg-slate-700 hover:bg-slate-600 text-white text-xs py-2 rounded">+1</button>
-                          <button onClick={() => updateMatchStat(activeLeagueId, match.id, player.id, 'pts', 2)} className="bg-slate-700 hover:bg-slate-600 text-white text-xs py-2 rounded">+2</button>
-                          <button onClick={() => updateMatchStat(activeLeagueId, match.id, player.id, 'pts', 3)} className="bg-slate-700 hover:bg-slate-600 text-white text-xs py-2 rounded">+3</button>
-                          <div className="flex flex-col gap-1">
-                             <button onClick={() => updateMatchStat(activeLeagueId, match.id, player.id, 'reb', 1)} className="bg-blue-900/50 hover:bg-blue-800 text-blue-200 text-[10px] py-1 rounded">REB</button>
-                             <button onClick={() => updateMatchStat(activeLeagueId, match.id, player.id, 'ast', 1)} className="bg-green-900/50 hover:bg-green-800 text-green-200 text-[10px] py-1 rounded">AST</button>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-             </div>
+              ))}
            </div>
         </div>
       );
     }
 
-    // Level 3: Player Details (Bottom Sheet / Modal)
-    if (activePlayerId) {
-      const activeLeague = leagues.find(l => l.id === activeLeagueId);
-      const activeTeam = activeLeague?.teams.find(t => t.id === activeTeamId);
-      const player = activeTeam?.players.find(p => p.id === activePlayerId);
-      
-      if (!player) return null;
+    // Level 3: Team Detail (Players)
+    if (activeTeamId && activeLeagueId) {
+      const league = leagues.find(l => l.id === activeLeagueId);
+      const team = league?.teams.find(t => t.id === activeTeamId);
+
+      if (!team) return null;
 
       return (
         <div className="flex flex-col h-full gap-6">
-           <button onClick={() => setActivePlayerId(null)} className="flex items-center gap-2 text-slate-400 hover:text-white w-fit">
-             <ArrowLeft size={18} /> {t.common.back}
-           </button>
-           
-           <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-xl">
-             <div className="flex justify-between items-start">
-               <div>
-                  <h2 className="text-3xl font-bold text-white mb-1 flex items-center gap-3">
-                    <span className="text-court-orange">#{player.number}</span> {player.name}
-                  </h2>
-                  <p className="text-slate-400">{activeTeam?.name} | {player.position} | {player.height} | {player.weight}</p>
-               </div>
-               <button 
-                onClick={() => handleGenerateScout(player)}
-                disabled={isGeneratingReport}
-                className="bg-court-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-50"
-               >
-                 <BrainCircuit size={18} /> {t.league.generateScout}
-               </button>
-             </div>
-             
-             <div className="grid grid-cols-3 gap-4 mt-8">
-               <div className="bg-slate-900 p-4 rounded-lg text-center border border-slate-700">
-                 <div className="text-xs text-slate-500 uppercase tracking-wide">PTS</div>
-                 <div className="text-2xl font-bold text-white">{player.stats.pts}</div>
-               </div>
-               <div className="bg-slate-900 p-4 rounded-lg text-center border border-slate-700">
-                 <div className="text-xs text-slate-500 uppercase tracking-wide">REB</div>
-                 <div className="text-2xl font-bold text-white">{player.stats.reb}</div>
-               </div>
-               <div className="bg-slate-900 p-4 rounded-lg text-center border border-slate-700">
-                 <div className="text-xs text-slate-500 uppercase tracking-wide">AST</div>
-                 <div className="text-2xl font-bold text-white">{player.stats.ast}</div>
-               </div>
-             </div>
-
-             {/* Scouting Report Section */}
-             {(scoutingReport || isGeneratingReport) && (
-               <div className="mt-8 pt-6 border-t border-slate-700">
-                 <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                   <ClipboardList className="text-court-orange" /> {t.league.scoutReport}
-                 </h3>
-                 <div className="bg-slate-900/50 p-6 rounded-lg text-slate-300 text-sm leading-relaxed border border-slate-700/50">
-                    {isGeneratingReport ? (
-                      <div className="flex items-center gap-2 text-slate-500">
-                        <BrainCircuit className="animate-pulse" /> Generating analysis...
-                      </div>
-                    ) : (
-                      <ReactMarkdown>{scoutingReport}</ReactMarkdown>
-                    )}
-                 </div>
-               </div>
-             )}
-           </div>
-        </div>
-      );
-    }
-
-    // Level 2: Team Roster View
-    if (activeTeamId) {
-      const activeLeague = leagues.find(l => l.id === activeLeagueId);
-      const team = activeLeague?.teams.find(t => t.id === activeTeamId);
-
-      return (
-        <div className="flex flex-col h-full gap-6">
-          <div className="flex items-center justify-between">
+           <div className="flex items-center justify-between">
             <button onClick={() => setActiveTeamId(null)} className="flex items-center gap-2 text-slate-400 hover:text-white">
               <ArrowLeft size={18} /> {t.common.back}
             </button>
-            <div className="text-slate-500 text-sm">{activeLeague?.name} / {activeLeague?.season}</div>
+            <div className="text-slate-500 text-sm">{league?.name} / {team.name}</div>
           </div>
 
           <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-xl">
              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                <div>
-                 <h2 className="text-2xl font-bold text-white mb-1">{team?.name}</h2>
-                 <p className="text-slate-400 text-sm">Coach: {team?.coach || 'N/A'}</p>
+                 <h2 className="text-3xl font-bold text-white mb-1">{team.name}</h2>
+                 <p className="text-slate-400 text-sm">Coach: {team.coach || 'N/A'}</p>
                </div>
                <button 
                 onClick={() => setIsAddPlayerOpen(true)}
                 className="bg-court-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"
                >
-                 <Plus size={18} /> {t.league.createPlayer}
+                 <UserPlus size={18} /> {t.league.createPlayer}
                </button>
              </div>
 
-             {/* Players List */}
+             {/* Player List */}
              <div className="overflow-x-auto">
-               <table className="w-full text-left text-sm text-slate-300">
-                 <thead className="bg-slate-900/50 text-slate-500 uppercase font-medium">
-                   <tr>
-                     <th className="p-3">#</th>
-                     <th className="p-3">{t.league.playerName}</th>
-                     <th className="p-3">Pos</th>
-                     <th className="p-3 text-center">PTS</th>
-                     <th className="p-3 text-center">REB</th>
-                     <th className="p-3 text-center">AST</th>
-                     <th className="p-3 text-right">Actions</th>
-                   </tr>
-                 </thead>
-                 <tbody className="divide-y divide-slate-700">
-                   {team?.players.length === 0 ? (
-                     <tr>
-                       <td colSpan={7} className="p-8 text-center text-slate-500">{t.league.noPlayers}</td>
-                     </tr>
-                   ) : (
-                     team?.players.map(p => (
-                       <tr key={p.id} onClick={() => { setActivePlayerId(p.id); setScoutingReport(p.scoutingReport || ''); }} className="hover:bg-slate-700/50 cursor-pointer transition-colors">
-                         <td className="p-3 font-mono text-court-orange">{p.number}</td>
-                         <td className="p-3 font-bold text-white">{p.name}</td>
-                         <td className="p-3">{p.position}</td>
-                         <td className="p-3 text-center">{p.stats.pts}</td>
-                         <td className="p-3 text-center">{p.stats.reb}</td>
-                         <td className="p-3 text-center">{p.stats.ast}</td>
-                         <td className="p-3 text-right">
-                           <button 
-                             onClick={(e) => { e.stopPropagation(); deletePlayer(activeLeagueId!, activeTeamId!, p.id); }}
-                             className="text-slate-500 hover:text-red-500 p-1"
-                           >
-                             <Trash2 size={16} />
-                           </button>
-                         </td>
-                       </tr>
-                     ))
-                   )}
-                 </tbody>
-               </table>
+                <table className="w-full text-left text-sm text-slate-300">
+                  <thead className="bg-slate-900/50 text-slate-500 uppercase font-medium">
+                    <tr>
+                      <th className="p-3">#</th>
+                      <th className="p-3">{t.league.playerName}</th>
+                      <th className="p-3">Pos</th>
+                      <th className="p-3">H / W</th>
+                      <th className="p-3 text-center">PPG / RPG / APG</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700">
+                     {team.players.length === 0 ? (
+                       <tr><td colSpan={6} className="p-8 text-center text-slate-500">{t.league.noPlayers}</td></tr>
+                     ) : (
+                       team.players.map(player => (
+                         <tr key={player.id} className="hover:bg-slate-700/50 transition-colors group">
+                            <td className="p-3 font-mono text-court-orange">{player.number}</td>
+                            <td className="p-3 font-bold text-white">{player.name}</td>
+                            <td className="p-3">{player.position}</td>
+                            <td className="p-3">{player.height} / {player.weight}</td>
+                            <td className="p-3 text-center font-mono text-xs">
+                              {player.stats.pts} / {player.stats.reb} / {player.stats.ast}
+                            </td>
+                            <td className="p-3 text-right flex justify-end gap-2">
+                              <button 
+                                onClick={() => handleGenerateScout(player)}
+                                className="text-blue-400 hover:text-blue-300 bg-blue-900/20 px-2 py-1 rounded text-xs border border-blue-900/50"
+                              >
+                                {t.league.scoutReport}
+                              </button>
+                              <button 
+                                onClick={() => deletePlayer(activeLeagueId!, activeTeamId!, player.id)}
+                                className="text-slate-500 hover:text-red-500 p-1"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                         </tr>
+                       ))
+                     )}
+                  </tbody>
+                </table>
              </div>
           </div>
-          
+
           {/* Add Player Modal */}
           {isAddPlayerOpen && (
             <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
               <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg border border-slate-700">
-                <h3 className="text-xl font-bold text-white mb-4">{t.league.createPlayer}</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className="block text-xs text-slate-400 mb-1">{t.league.playerName}</label>
-                    <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} />
-                  </div>
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className="block text-xs text-slate-400 mb-1">#</label>
-                    <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newPlayer.number} onChange={e => setNewPlayer({...newPlayer, number: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">Position</label>
-                    <select className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newPlayer.position} onChange={e => setNewPlayer({...newPlayer, position: e.target.value})}>
-                      <option value="G">Guard</option>
-                      <option value="F">Forward</option>
-                      <option value="C">Center</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-1">Height/Weight</label>
-                    <input type="text" placeholder="6'6 / 220lbs" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newPlayer.height} onChange={e => setNewPlayer({...newPlayer, height: e.target.value})} />
-                  </div>
-                  {/* Stats Input */}
-                  <div className="col-span-2">
-                     <label className="block text-xs text-slate-400 mb-1 border-t border-slate-700 pt-2 mt-1">{t.league.stats} (AVG)</label>
-                     <div className="flex gap-2">
-                       <input type="number" placeholder="PTS" className="w-1/3 bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newPlayer.pts} onChange={e => setNewPlayer({...newPlayer, pts: e.target.value})} />
-                       <input type="number" placeholder="REB" className="w-1/3 bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newPlayer.reb} onChange={e => setNewPlayer({...newPlayer, reb: e.target.value})} />
-                       <input type="number" placeholder="AST" className="w-1/3 bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newPlayer.ast} onChange={e => setNewPlayer({...newPlayer, ast: e.target.value})} />
-                     </div>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-3 mt-6">
-                  <button onClick={() => setIsAddPlayerOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
-                  <button onClick={addPlayer} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600">{t.common.save}</button>
-                </div>
+                 <h3 className="text-xl font-bold text-white mb-4">{t.league.createPlayer}</h3>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="block text-xs text-slate-400 mb-1">{t.league.playerName}</label>
+                      <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newPlayer.name} onChange={e => setNewPlayer({...newPlayer, name: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Number</label>
+                      <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newPlayer.number} onChange={e => setNewPlayer({...newPlayer, number: e.target.value})} />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Position</label>
+                      <select className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newPlayer.position} onChange={e => setNewPlayer({...newPlayer, position: e.target.value})}>
+                        <option value="G">Guard</option>
+                        <option value="F">Forward</option>
+                        <option value="C">Center</option>
+                      </select>
+                    </div>
+                    <div>
+                       <label className="block text-xs text-slate-400 mb-1">Height</label>
+                       <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newPlayer.height} onChange={e => setNewPlayer({...newPlayer, height: e.target.value})} />
+                    </div>
+                    <div>
+                       <label className="block text-xs text-slate-400 mb-1">Weight</label>
+                       <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newPlayer.weight} onChange={e => setNewPlayer({...newPlayer, weight: e.target.value})} />
+                    </div>
+                    <div className="col-span-2 pt-2 border-t border-slate-700">
+                       <label className="block text-xs text-slate-400 mb-2">Initial Stats (Averages)</label>
+                       <div className="grid grid-cols-3 gap-2">
+                          <input type="number" placeholder="PTS" className="bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newPlayer.pts} onChange={e => setNewPlayer({...newPlayer, pts: e.target.value})} />
+                          <input type="number" placeholder="REB" className="bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newPlayer.reb} onChange={e => setNewPlayer({...newPlayer, reb: e.target.value})} />
+                          <input type="number" placeholder="AST" className="bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newPlayer.ast} onChange={e => setNewPlayer({...newPlayer, ast: e.target.value})} />
+                       </div>
+                    </div>
+                 </div>
+                 <div className="flex justify-end gap-3 mt-6">
+                    <button onClick={() => setIsAddPlayerOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
+                    <button onClick={addPlayer} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600">{t.common.save}</button>
+                 </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Scout Report Modal */}
+          {activePlayerId && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+              <div className="bg-slate-800 rounded-xl w-full max-w-2xl h-[80vh] flex flex-col border border-slate-700 shadow-2xl">
+                 <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900 rounded-t-xl">
+                   <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                     <BrainCircuit className="text-court-orange" /> {t.league.scoutReport}
+                   </h3>
+                   <button onClick={() => setActivePlayerId(null)} className="text-slate-400 hover:text-white"><X size={20} /></button>
+                 </div>
+                 <div className="flex-1 overflow-y-auto p-6 text-slate-300">
+                    {isGeneratingReport ? (
+                      <div className="flex flex-col items-center justify-center h-full gap-4">
+                        <div className="w-8 h-8 border-4 border-court-orange border-t-transparent rounded-full animate-spin"></div>
+                        <p>{t.tactics.analyzing}</p>
+                      </div>
+                    ) : (
+                      <ReactMarkdown components={{
+                         h1: ({node, ...props}) => <h3 className="text-lg font-bold text-white mt-4 mb-2" {...props} />,
+                         h2: ({node, ...props}) => <h4 className="text-base font-bold text-court-orange mt-4 mb-2" {...props} />,
+                         li: ({node, ...props}) => <li className="ml-4 list-disc" {...props} />
+                      }}>{scoutingReport}</ReactMarkdown>
+                    )}
+                 </div>
               </div>
             </div>
           )}
@@ -960,428 +1473,388 @@ const App = () => {
       );
     }
 
-    // Level 1: Leagues Dashboard / Detail
-    // If activeLeagueId is selected but no Team selected, show League Dashboard
+    // Level 2: League Detail (Teams List)
     if (activeLeagueId) {
       const league = leagues.find(l => l.id === activeLeagueId);
       if (!league) return null;
 
       return (
         <div className="flex flex-col h-full gap-6">
-           {/* League Header */}
            <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 flex justify-between items-center shadow-lg">
              <div className="flex items-center gap-4">
                <button onClick={() => setActiveLeagueId(null)} className="text-slate-400 hover:text-white"><ArrowLeft /></button>
                <div>
                   <h2 className="text-2xl font-bold text-white">{league.name}</h2>
-                  <p className="text-slate-400 text-sm">{league.season}</p>
+                  <p className="text-slate-400 text-sm">{t.league.season}: {league.season}</p>
                </div>
              </div>
-             {/* Tab Switcher */}
              <div className="flex bg-slate-900 rounded-lg p-1">
-                <button 
-                  onClick={() => setActiveLeagueTab('teams')}
-                  className={`px-4 py-2 rounded-md font-bold text-sm transition-all ${activeLeagueTab === 'teams' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                >
-                  {t.league.tabs.teams}
-                </button>
-                <button 
-                  onClick={() => setActiveLeagueTab('matches')}
-                  className={`px-4 py-2 rounded-md font-bold text-sm transition-all ${activeLeagueTab === 'matches' ? 'bg-slate-700 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                >
-                  {t.league.tabs.matches}
-                </button>
+                <button onClick={() => setActiveLeagueTab('teams')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeLeagueTab === 'teams' ? 'bg-slate-700 text-white shadow' : 'text-slate-400'}`}>{t.league.tabs.teams}</button>
+                <button onClick={() => setActiveLeagueTab('matches')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeLeagueTab === 'matches' ? 'bg-slate-700 text-white shadow' : 'text-slate-400'}`}>{t.league.tabs.matches}</button>
              </div>
            </div>
 
-           {activeLeagueTab === 'teams' ? (
-              <div className="flex-1 overflow-y-auto">
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                    {league.teams.map(team => (
-                      <button 
-                        key={team.id}
-                        onClick={() => setActiveTeamId(team.id)}
-                        className="bg-slate-800 p-4 rounded-xl text-left hover:bg-slate-700 transition-all border border-slate-700 hover:border-court-orange group"
-                      >
-                         <div className="font-bold text-white text-lg group-hover:text-court-orange truncate">{team.name}</div>
-                         <div className="text-sm text-slate-500">{team.players.length} Players</div>
-                         <div className="mt-4 flex gap-2">
-                            <span className="text-xs bg-slate-900 px-2 py-1 rounded text-green-400">{team.wins} W</span>
-                            <span className="text-xs bg-slate-900 px-2 py-1 rounded text-red-400">{team.losses} L</span>
-                         </div>
-                      </button>
-                    ))}
-                    
-                    <button 
+           <div className="flex-1 overflow-y-auto">
+             {activeLeagueTab === 'teams' ? (
+               <div className="space-y-4">
+                  <div className="flex justify-end">
+                     <button 
                       onClick={() => setIsAddTeamOpen(true)}
-                      className="bg-slate-800/50 border-2 border-dashed border-slate-700 p-4 rounded-xl flex flex-col items-center justify-center text-slate-500 hover:text-court-orange hover:border-court-orange transition-all min-h-[140px]"
-                    >
-                      <Plus size={32} />
-                      <span className="text-sm mt-2 font-bold">{t.league.createTeam}</span>
-                    </button>
+                      className="bg-court-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"
+                     >
+                       <Plus size={18} /> {t.league.createTeam}
+                     </button>
                   </div>
-              </div>
-           ) : (
-              // Matches Tab
-              <div className="flex-1 overflow-y-auto">
-                 <div className="flex justify-end mb-4">
-                    <button 
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                     {league.teams.length === 0 ? (
+                        <div className="col-span-full p-8 text-center text-slate-500 border border-dashed border-slate-700 rounded-xl">{t.league.noTeams}</div>
+                     ) : (
+                        league.teams.map(team => (
+                          <div key={team.id} onClick={() => setActiveTeamId(team.id)} className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-court-orange cursor-pointer transition-all group relative">
+                             <div className="flex justify-between items-start mb-2">
+                               <h3 className="text-lg font-bold text-white">{team.name}</h3>
+                               <button onClick={(e) => {e.stopPropagation(); deleteTeam(activeLeagueId!, team.id)}} className="text-slate-600 hover:text-red-500"><Trash2 size={16}/></button>
+                             </div>
+                             <div className="text-sm text-slate-400 mb-4">Coach: {team.coach || '-'}</div>
+                             <div className="flex justify-between items-center text-xs font-mono bg-slate-900 p-2 rounded">
+                                <span className="text-green-400">W: {team.wins}</span>
+                                <span className="text-red-400">L: {team.losses}</span>
+                                <span className="text-slate-500">{team.players.length} Players</span>
+                             </div>
+                          </div>
+                        ))
+                     )}
+                  </div>
+               </div>
+             ) : (
+               <div className="space-y-4">
+                  <div className="flex justify-end">
+                     <button 
                       onClick={() => setIsAddMatchOpen(true)}
                       className="bg-court-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"
-                    >
-                      <Calendar size={18} /> {t.league.match.create}
-                    </button>
-                 </div>
-                 
-                 <div className="space-y-3">
-                   {(!league.matches || league.matches.length === 0) ? (
-                     <p className="text-center text-slate-500 py-8">{t.league.match.noMatches}</p>
-                   ) : (
-                     league.matches.map(match => {
-                       const home = league.teams.find(t => t.id === match.homeTeamId);
-                       const away = league.teams.find(t => t.id === match.awayTeamId);
-                       return (
-                         <div key={match.id} className="bg-slate-800 border border-slate-700 rounded-xl p-4 flex justify-between items-center hover:bg-slate-750">
-                            <div className="flex items-center gap-6 flex-1">
-                               <div className="text-right w-1/3">
-                                 <div className="font-bold text-white">{home?.name}</div>
-                                 <div className="text-2xl font-bold text-slate-300">{match.homeScore}</div>
-                               </div>
-                               <div className="text-center w-20 shrink-0">
-                                  <div className="text-xs text-slate-500 mb-1">{match.date}</div>
-                                  <div className={`text-xs font-bold px-2 py-1 rounded ${match.status === 'Live' ? 'bg-red-900 text-red-400 animate-pulse' : match.status === 'Final' ? 'bg-slate-900 text-slate-400' : 'bg-blue-900 text-blue-400'}`}>
-                                    {match.status}
-                                  </div>
-                               </div>
-                               <div className="text-left w-1/3">
-                                 <div className="font-bold text-white">{away?.name}</div>
-                                 <div className="text-2xl font-bold text-slate-300">{match.awayScore}</div>
-                               </div>
-                            </div>
-                            <div className="ml-4 pl-4 border-l border-slate-700">
-                               {match.status !== 'Final' && (
-                                 <button 
-                                   onClick={() => setActiveMatchId(match.id)}
-                                   className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-bold text-white transition-colors ${match.status === 'Live' ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-700 hover:bg-slate-600'}`}
-                                 >
-                                   <Play size={16} /> {match.status === 'Live' ? t.league.match.resume : t.league.match.start}
-                                 </button>
-                               )}
-                            </div>
-                         </div>
-                       )
-                     })
-                   )}
-                 </div>
-              </div>
+                     >
+                       <Calendar size={18} /> {t.league.match.create}
+                     </button>
+                  </div>
+                  <div className="space-y-2">
+                    {(!league.matches || league.matches.length === 0) ? (
+                        <div className="p-8 text-center text-slate-500 border border-dashed border-slate-700 rounded-xl">{t.league.match.noMatches}</div>
+                     ) : (
+                        league.matches.map(match => {
+                           const home = league.teams.find(t => t.id === match.homeTeamId);
+                           const away = league.teams.find(t => t.id === match.awayTeamId);
+                           if (!home || !away) return null;
+                           return (
+                             <div key={match.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col md:flex-row items-center justify-between gap-4">
+                                <div className="flex items-center gap-4 flex-1 justify-center md:justify-start">
+                                   <span className="font-bold text-right w-24 truncate">{home.name}</span>
+                                   <div className="bg-slate-900 px-3 py-1 rounded text-court-orange font-mono font-bold flex gap-2">
+                                      <span>{match.homeScore}</span>
+                                      <span>-</span>
+                                      <span>{match.awayScore}</span>
+                                   </div>
+                                   <span className="font-bold text-left w-24 truncate">{away.name}</span>
+                                </div>
+                                <div className="text-sm text-slate-500">{match.date}</div>
+                                <button 
+                                  onClick={() => setActiveMatchId(match.id)}
+                                  className={`px-4 py-2 rounded-lg text-sm font-bold w-full md:w-auto ${match.status === 'Final' ? 'bg-slate-700 text-slate-300' : 'bg-green-600 text-white hover:bg-green-500'}`}
+                                >
+                                  {match.status === 'Scheduled' ? t.league.match.start : match.status === 'Live' ? t.league.match.resume : 'View Stats'}
+                                </button>
+                             </div>
+                           )
+                        })
+                     )}
+                  </div>
+               </div>
+             )}
+           </div>
+
+           {/* Add Team Modal */}
+           {isAddTeamOpen && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+               <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700">
+                  <h3 className="text-xl font-bold text-white mb-4">{t.league.createTeam}</h3>
+                  <div className="space-y-4">
+                     <div>
+                       <label className="block text-sm text-slate-400 mb-1">{t.league.teamName}</label>
+                       <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newTeamName} onChange={e => setNewTeamName(e.target.value)} />
+                     </div>
+                     <div>
+                       <label className="block text-sm text-slate-400 mb-1">Coach Name</label>
+                       <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newTeamCoach} onChange={e => setNewTeamCoach(e.target.value)} />
+                     </div>
+                  </div>
+                  <div className="flex justify-end gap-3 mt-6">
+                     <button onClick={() => setIsAddTeamOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
+                     <button onClick={addTeam} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600">{t.common.save}</button>
+                  </div>
+               </div>
+            </div>
            )}
 
-            {/* Add Team Modal */}
-          {isAddTeamOpen && (
+            {/* Add Match Modal */}
+            {isAddMatchOpen && (
             <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-              <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700 shadow-2xl">
-                 <h3 className="text-xl font-bold text-white mb-4">{t.league.createTeam}</h3>
-                 <div className="space-y-4">
-                   <div>
-                     <label className="block text-sm text-slate-400 mb-1">{t.league.teamName}</label>
-                     <input 
-                      type="text" 
-                      className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white focus:border-court-orange outline-none" 
-                      value={newTeamName}
-                      onChange={(e) => setNewTeamName(e.target.value)}
-                     />
-                   </div>
-                   <div>
-                     <label className="block text-sm text-slate-400 mb-1">Coach Name</label>
-                     <input 
-                      type="text" 
-                      className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white focus:border-court-orange outline-none" 
-                      value={newTeamCoach}
-                      onChange={(e) => setNewTeamCoach(e.target.value)}
-                     />
-                   </div>
-                 </div>
-                 <div className="flex justify-end gap-3 mt-6">
-                   <button onClick={() => setIsAddTeamOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
-                   <button onClick={addTeam} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600">{t.common.save}</button>
-                 </div>
-              </div>
-            </div>
-          )}
-
-           {/* Add Match Modal */}
-           {isAddMatchOpen && (
-              <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-                <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700 shadow-2xl">
-                   <h3 className="text-xl font-bold text-white mb-4">{t.league.match.create}</h3>
-                   <div className="space-y-4">
+               <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700">
+                  <h3 className="text-xl font-bold text-white mb-4">{t.league.match.create}</h3>
+                  <div className="space-y-4">
                      <div>
-                        <label className="block text-sm text-slate-400 mb-1">{t.league.match.home}</label>
-                        <select 
-                          className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white"
-                          value={newMatch.homeTeamId}
-                          onChange={(e) => setNewMatch({...newMatch, homeTeamId: e.target.value})}
-                        >
+                       <label className="block text-sm text-slate-400 mb-1">{t.league.match.home}</label>
+                       <select className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newMatch.homeTeamId} onChange={e => setNewMatch({...newMatch, homeTeamId: e.target.value})}>
                           <option value="">Select Team</option>
                           {league.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
+                       </select>
                      </div>
                      <div>
-                        <label className="block text-sm text-slate-400 mb-1">{t.league.match.away}</label>
-                        <select 
-                          className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white"
-                          value={newMatch.awayTeamId}
-                          onChange={(e) => setNewMatch({...newMatch, awayTeamId: e.target.value})}
-                        >
+                       <label className="block text-sm text-slate-400 mb-1">{t.league.match.away}</label>
+                       <select className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newMatch.awayTeamId} onChange={e => setNewMatch({...newMatch, awayTeamId: e.target.value})}>
                           <option value="">Select Team</option>
-                          {league.teams.filter(t => t.id !== newMatch.homeTeamId).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
+                          {league.teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                       </select>
                      </div>
-                   </div>
-                   <div className="flex justify-end gap-3 mt-6">
+                     <div>
+                       <label className="block text-sm text-slate-400 mb-1">Date</label>
+                       <input type="date" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newMatch.date} onChange={e => setNewMatch({...newMatch, date: e.target.value})} />
+                     </div>
+                  </div>
+                  <div className="flex justify-end gap-3 mt-6">
                      <button onClick={() => setIsAddMatchOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
-                     <button onClick={addMatch} disabled={!newMatch.homeTeamId || !newMatch.awayTeamId} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600 disabled:opacity-50">{t.common.save}</button>
-                   </div>
-                </div>
-              </div>
+                     <button onClick={addMatch} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600">{t.common.save}</button>
+                  </div>
+               </div>
+            </div>
            )}
         </div>
       );
     }
 
-    // Default: Leagues List
+    // Level 1: Leagues List
     return (
       <div className="flex flex-col h-full gap-6">
-        <div className="flex justify-between items-center bg-slate-800 p-6 rounded-xl border border-slate-700">
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Trophy className="text-court-orange" /> {t.league.title}
-          </h2>
-          <button 
-            onClick={() => setIsAddLeagueOpen(true)}
-            className="bg-court-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg"
-          >
-            <Plus size={18} /> {t.league.createLeague}
-          </button>
-        </div>
+         <div className="flex justify-between items-center bg-slate-800 p-6 rounded-xl border border-slate-700">
+           <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+             <Trophy className="text-court-orange" /> {t.league.title}
+           </h2>
+           <button 
+             onClick={() => setIsAddLeagueOpen(true)}
+             className="bg-court-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg"
+           >
+             <Plus size={18} /> {t.league.createLeague}
+           </button>
+         </div>
 
-        {/* Leagues List */}
-        <div className="flex-1 overflow-y-auto space-y-4">
-           {leagues.length === 0 ? (
-             <div className="flex flex-col items-center justify-center h-64 text-slate-500 bg-slate-800/50 rounded-xl border border-slate-700 border-dashed">
-                <Trophy size={48} className="mb-4 opacity-20" />
-                <p>{t.league.noLeagues}</p>
-             </div>
-           ) : (
-             leagues.map(league => (
-               <div key={league.id} className="bg-slate-800 border border-slate-700 rounded-xl p-4 hover:border-slate-500 transition-colors">
-                  <div className="flex justify-between items-start mb-4">
-                    <button onClick={() => setActiveLeagueId(league.id)} className="text-left group">
-                      <h3 className="text-xl font-bold text-white group-hover:text-court-orange transition-colors">{league.name}</h3>
-                      <p className="text-sm text-slate-400">{league.season} • {league.teams.length} Teams</p>
-                    </button>
-                    <div className="flex items-center gap-2">
-                       <button onClick={() => setActiveLeagueId(league.id)} className="text-sm text-court-orange hover:text-white border border-slate-700 hover:bg-slate-700 px-3 py-1 rounded">Manage</button>
-                       <button onClick={() => deleteLeague(league.id)} className="text-slate-500 hover:text-red-500 p-2"><Trash2 size={18} /></button>
-                    </div>
-                  </div>
-                  
-                  {/* Teams Mini-Grid Preview */}
-                  {league.teams.length > 0 && (
-                     <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-700">
-                        {league.teams.slice(0, 5).map(team => (
-                           <div key={team.id} className="bg-slate-900 px-3 py-2 rounded text-xs text-slate-300 whitespace-nowrap border border-slate-800">
-                              {team.name}
+         <div className="flex-1 overflow-y-auto space-y-4">
+            {leagues.length === 0 ? (
+               <div className="flex flex-col items-center justify-center h-64 text-slate-500 bg-slate-800/50 rounded-xl border border-slate-700 border-dashed">
+                 <Trophy size={48} className="mb-4 opacity-20" />
+                 <p>{t.league.noLeagues}</p>
+               </div>
+            ) : (
+               leagues.map(league => (
+                  <div key={league.id} className="bg-slate-800 border border-slate-700 rounded-xl p-4 hover:border-slate-500 transition-colors">
+                     <div className="flex justify-between items-start">
+                        <button onClick={() => setActiveLeagueId(league.id)} className="text-left group flex-1">
+                           <h3 className="text-xl font-bold text-white group-hover:text-court-orange transition-colors">{league.name}</h3>
+                           <p className="text-sm text-slate-400 mb-2">{t.league.season}: {league.season}</p>
+                           <div className="flex gap-4">
+                              <span className="text-xs bg-slate-900 text-slate-300 px-2 py-1 rounded border border-slate-700 flex items-center gap-1">
+                                <Flag size={12} /> {league.teams.length} Teams
+                              </span>
+                              <span className="text-xs bg-slate-900 text-slate-300 px-2 py-1 rounded border border-slate-700 flex items-center gap-1">
+                                <Calendar size={12} /> {league.matches?.length || 0} Matches
+                              </span>
                            </div>
-                        ))}
-                        {league.teams.length > 5 && <div className="text-xs text-slate-500 flex items-center px-2">+{league.teams.length - 5} more</div>}
+                        </button>
+                        <div className="flex items-center gap-2">
+                           <button onClick={() => setActiveLeagueId(league.id)} className="text-sm text-court-orange hover:text-white border border-slate-700 hover:bg-slate-700 px-3 py-1 rounded">Manage</button>
+                           <button onClick={() => deleteLeague(league.id)} className="text-slate-500 hover:text-red-500 p-2"><Trash2 size={18} /></button>
+                        </div>
                      </div>
-                  )}
-               </div>
-             ))
-           )}
-        </div>
+                  </div>
+               ))
+            )}
+         </div>
 
-        {/* Add League Modal */}
-        {isAddLeagueOpen && (
-          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700 shadow-2xl">
-               <h3 className="text-xl font-bold text-white mb-4">{t.league.createLeague}</h3>
-               <div className="space-y-4">
-                 <div>
-                   <label className="block text-sm text-slate-400 mb-1">{t.league.leagueName}</label>
-                   <input 
-                    type="text" 
-                    className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white focus:border-court-orange outline-none" 
-                    value={newLeagueName}
-                    onChange={(e) => setNewLeagueName(e.target.value)}
-                   />
-                 </div>
-                 <div>
-                   <label className="block text-sm text-slate-400 mb-1">{t.league.season}</label>
-                   <input 
-                    type="text" 
-                    placeholder="2024-2025"
-                    className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white focus:border-court-orange outline-none" 
-                    value={newLeagueSeason}
-                    onChange={(e) => setNewLeagueSeason(e.target.value)}
-                   />
-                 </div>
-               </div>
-               <div className="flex justify-end gap-3 mt-6">
-                 <button onClick={() => setIsAddLeagueOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
-                 <button onClick={addLeague} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600">{t.common.save}</button>
+         {/* Add League Modal */}
+         {isAddLeagueOpen && (
+            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+               <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700 shadow-2xl">
+                  <h3 className="text-xl font-bold text-white mb-4">{t.league.createLeague}</h3>
+                  <div className="space-y-4">
+                     <div>
+                       <label className="block text-sm text-slate-400 mb-1">{t.league.leagueName}</label>
+                       <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newLeagueName} onChange={e => setNewLeagueName(e.target.value)} />
+                     </div>
+                     <div>
+                       <label className="block text-sm text-slate-400 mb-1">{t.league.season}</label>
+                       <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newLeagueSeason} onChange={e => setNewLeagueSeason(e.target.value)} />
+                     </div>
+                  </div>
+                  <div className="flex justify-end gap-3 mt-6">
+                     <button onClick={() => setIsAddLeagueOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
+                     <button onClick={addLeague} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600">{t.common.save}</button>
+                  </div>
                </div>
             </div>
-          </div>
-        )}
+         )}
       </div>
     );
   };
 
-  const renderTraining = () => (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
-      {/* Sidebar: Config & Saved Plans */}
-      <div className="lg:col-span-4 bg-slate-800 rounded-xl border border-slate-700 flex flex-col h-full overflow-hidden">
-        <div className="flex border-b border-slate-700">
-          <button 
-            onClick={() => setActiveTab('generator')}
-            className={`flex-1 py-3 font-bold text-sm transition-colors ${activeTab === 'generator' ? 'bg-slate-700 text-white border-b-2 border-court-orange' : 'text-slate-400 hover:text-slate-200'}`}
-          >
-            {t.training.title}
-          </button>
-          <button 
-             onClick={() => setActiveTab('saved')}
-             className={`flex-1 py-3 font-bold text-sm transition-colors ${activeTab === 'saved' ? 'bg-slate-700 text-white border-b-2 border-court-orange' : 'text-slate-400 hover:text-slate-200'}`}
-          >
-             {t.training.savedPlans}
-          </button>
-        </div>
+  const renderTraining = () => {
+    const handleGenerate = async () => {
+      if (isPlanLoading) return;
+      setIsPlanLoading(true);
+      setTrainingPlan('');
+      try {
+        const plan = await generatePlan(trainingConfig, language);
+        setTrainingPlan(plan);
+      } catch (e) {
+        setTrainingPlan('Failed to generate plan.');
+      } finally {
+        setIsPlanLoading(false);
+      }
+    };
 
-        <div className="flex-1 overflow-y-auto p-6">
-          {activeTab === 'generator' ? (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-slate-400 mb-1">{t.training.duration}</label>
-                <select 
-                  value={trainingConfig.days}
-                  onChange={(e) => setTrainingConfig({...trainingConfig, days: e.target.value})}
-                  className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white focus:border-court-orange focus:outline-none"
-                >
-                  <option value="1">{t.training.daysOptions["1"]}</option>
-                  <option value="7">{t.training.daysOptions["7"]}</option>
-                  <option value="30">{t.training.daysOptions["30"]}</option>
-                </select>
+    return (
+      <div className="flex flex-col h-full gap-6">
+         {/* Tabs */}
+         <div className="flex bg-slate-800 p-1 rounded-xl w-fit">
+            <button 
+              onClick={() => setActiveTab('generator')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'generator' ? 'bg-court-orange text-white shadow' : 'text-slate-400 hover:text-white'}`}
+            >
+              {t.training.title}
+            </button>
+            <button 
+              onClick={() => setActiveTab('saved')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'saved' ? 'bg-court-orange text-white shadow' : 'text-slate-400 hover:text-white'}`}
+            >
+              {t.training.savedPlans}
+            </button>
+         </div>
+
+         {activeTab === 'generator' ? (
+           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+              {/* Configuration Panel */}
+              <div className="lg:col-span-4 bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg h-fit">
+                 <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                   <ClipboardList className="text-court-orange" /> Configuration
+                 </h2>
+                 <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-1">{t.training.duration}</label>
+                      <select 
+                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white"
+                        value={trainingConfig.days}
+                        onChange={(e) => setTrainingConfig({...trainingConfig, days: e.target.value})}
+                      >
+                         <option value="1">{t.training.daysOptions["1"]}</option>
+                         <option value="7">{t.training.daysOptions["7"]}</option>
+                         <option value="30">{t.training.daysOptions["30"]}</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-1">{t.training.level}</label>
+                      <select 
+                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white"
+                        value={trainingConfig.level}
+                        onChange={(e) => setTrainingConfig({...trainingConfig, level: e.target.value})}
+                      >
+                         <option value="Beginner">{t.training.levelOptions["Beginner"]}</option>
+                         <option value="Intermediate">{t.training.levelOptions["Intermediate"]}</option>
+                         <option value="Advanced">{t.training.levelOptions["Advanced"]}</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-1">{t.training.focus}</label>
+                      <input 
+                        type="text" 
+                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white"
+                        placeholder="e.g. Shooting, Defense, Conditioning"
+                        value={trainingConfig.focus}
+                        onChange={(e) => setTrainingConfig({...trainingConfig, focus: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-1">{t.training.age}</label>
+                      <input 
+                        type="number" 
+                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white"
+                        value={trainingConfig.age}
+                        onChange={(e) => setTrainingConfig({...trainingConfig, age: e.target.value})}
+                      />
+                    </div>
+                 </div>
+                 <button 
+                   onClick={handleGenerate}
+                   disabled={isPlanLoading}
+                   className="w-full mt-6 bg-court-orange hover:bg-orange-600 disabled:opacity-50 text-white py-3 rounded-lg font-bold transition-all shadow-lg flex justify-center items-center gap-2"
+                 >
+                   {isPlanLoading ? (
+                     <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> {t.training.generatingButton}</>
+                   ) : (
+                     <>{t.training.generateButton}</>
+                   )}
+                 </button>
               </div>
-              <div>
-                <label className="block text-sm text-slate-400 mb-1">{t.training.level}</label>
-                <select 
-                  value={trainingConfig.level}
-                  onChange={(e) => setTrainingConfig({...trainingConfig, level: e.target.value})}
-                  className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white focus:border-court-orange focus:outline-none"
-                >
-                  <option value="Beginner">{t.training.levelOptions["Beginner"]}</option>
-                  <option value="Intermediate">{t.training.levelOptions["Intermediate"]}</option>
-                  <option value="Advanced">{t.training.levelOptions["Advanced"]}</option>
-                </select>
+
+              {/* Result Panel */}
+              <div className="lg:col-span-8 bg-slate-800 rounded-xl border border-slate-700 flex flex-col overflow-hidden shadow-lg">
+                 <div className="p-4 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
+                    <span className="font-bold text-white">Generated Plan</span>
+                    {trainingPlan && (
+                      <button onClick={handleSavePlan} className="text-court-orange hover:text-white flex items-center gap-1 text-sm font-bold">
+                        <Save size={16} /> {t.training.saveButton}
+                      </button>
+                    )}
+                 </div>
+                 <div className="flex-1 overflow-y-auto p-6 text-slate-300">
+                    {trainingPlan ? (
+                       <ReactMarkdown components={{
+                          h1: ({node, ...props}) => <h2 className="text-2xl font-bold text-white mb-4 border-b border-slate-700 pb-2" {...props} />,
+                          h2: ({node, ...props}) => <h3 className="text-xl font-bold text-court-orange mt-6 mb-3" {...props} />,
+                          h3: ({node, ...props}) => <h4 className="text-lg font-bold text-white mt-4 mb-2" {...props} />,
+                          ul: ({node, ...props}) => <ul className="list-disc list-inside space-y-2 mb-4" {...props} />,
+                          strong: ({node, ...props}) => <strong className="text-white font-bold" {...props} />
+                       }}>{trainingPlan}</ReactMarkdown>
+                    ) : (
+                       <div className="flex flex-col items-center justify-center h-full text-slate-500 opacity-60">
+                          <BookOpen size={48} className="mb-4" />
+                          <p className="max-w-xs text-center">{t.training.emptyState}</p>
+                       </div>
+                    )}
+                 </div>
               </div>
-              <div>
-                <label className="block text-sm text-slate-400 mb-1">{t.training.focus}</label>
-                <input 
-                  type="text"
-                  value={trainingConfig.focus}
-                  onChange={(e) => setTrainingConfig({...trainingConfig, focus: e.target.value})}
-                  className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white focus:border-court-orange focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-slate-400 mb-1">{t.training.age}</label>
-                <input 
-                  type="number"
-                  value={trainingConfig.age}
-                  onChange={(e) => setTrainingConfig({...trainingConfig, age: e.target.value})}
-                  className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white focus:border-court-orange focus:outline-none"
-                />
-              </div>
-              
-              <button 
-                onClick={async () => {
-                  setIsPlanLoading(true);
-                  try {
-                    const plan = await generatePlan(trainingConfig, language);
-                    setTrainingPlan(plan);
-                  } catch (e) {
-                    setTrainingPlan("Failed to generate plan. Please check API key.");
-                  } finally {
-                    setIsPlanLoading(false);
-                  }
-                }}
-                disabled={isPlanLoading}
-                className="w-full bg-court-orange text-white py-3 rounded-lg font-bold hover:bg-orange-600 transition-colors mt-4 disabled:opacity-50"
-              >
-                {isPlanLoading ? t.training.generatingButton : t.training.generateButton}
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
+           </div>
+         ) : (
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 flex-1 overflow-y-auto">
               {savedPlans.length === 0 ? (
-                <p className="text-slate-500 text-center py-8">{t.training.noSaved}</p>
+                 <div className="col-span-full flex flex-col items-center justify-center h-64 text-slate-500 bg-slate-800/50 rounded-xl border border-slate-700 border-dashed">
+                    <Save size={48} className="mb-4 opacity-20" />
+                    <p>{t.training.noSaved}</p>
+                 </div>
               ) : (
-                savedPlans.map(plan => (
-                  <div key={plan.id} className="bg-slate-900 border border-slate-700 rounded-lg p-3 hover:border-slate-500 transition-colors">
-                    <div 
-                      className="cursor-pointer mb-2"
-                      onClick={() => {
-                        setTrainingPlan(plan.content);
-                        if (window.innerWidth < 1024) {
-                           // On mobile, maybe scroll to content or something, but here we just load it
-                        }
-                      }}
-                    >
-                      <h4 className="font-bold text-slate-200 text-sm">{plan.title}</h4>
-                      <p className="text-xs text-slate-500">{plan.date}</p>
+                 savedPlans.map(plan => (
+                    <div key={plan.id} className="bg-slate-800 p-6 rounded-xl border border-slate-700 hover:border-court-orange transition-all group flex flex-col h-96 relative">
+                       <div className="flex justify-between items-start mb-2">
+                          <h3 className="text-lg font-bold text-white line-clamp-1">{plan.title}</h3>
+                          <button onClick={() => handleDeletePlan(plan.id)} className="text-slate-600 hover:text-red-500"><Trash2 size={16} /></button>
+                       </div>
+                       <p className="text-xs text-slate-500 mb-4 flex items-center gap-1"><Calendar size={12}/> {plan.date}</p>
+                       <div className="flex-1 overflow-y-auto pr-2 text-sm text-slate-400 border-t border-slate-700 pt-2">
+                          <ReactMarkdown>{plan.content}</ReactMarkdown>
+                       </div>
                     </div>
-                    <div className="flex justify-between items-center mt-2 border-t border-slate-800 pt-2">
-                       <button onClick={() => setTrainingPlan(plan.content)} className="text-xs text-court-orange hover:text-white font-medium">Load</button>
-                       <button onClick={() => handleDeletePlan(plan.id)} className="text-xs text-red-500 hover:text-red-400">
-                         <Trash2 size={14} />
-                       </button>
-                    </div>
-                  </div>
-                ))
+                 ))
               )}
-            </div>
-          )}
-        </div>
+           </div>
+         )}
       </div>
-
-      {/* Main Content: Plan View */}
-      <div className="lg:col-span-8 bg-slate-800 rounded-xl border border-slate-700 h-full overflow-hidden flex flex-col">
-        {trainingPlan ? (
-           <>
-             <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/30">
-                <h3 className="font-bold text-white flex items-center gap-2">
-                   <BookOpen size={18} className="text-court-orange" /> Generated Plan
-                </h3>
-                <button 
-                  onClick={handleSavePlan}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 hover:bg-court-orange text-white rounded text-sm transition-colors"
-                >
-                  <Save size={16} /> {t.training.saveButton}
-                </button>
-             </div>
-             <div className="flex-1 overflow-y-auto p-6 prose prose-invert max-w-none">
-               <ReactMarkdown>{trainingPlan}</ReactMarkdown>
-             </div>
-           </>
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-slate-500">
-            <BookOpen size={64} className="mb-4 opacity-20" />
-            <p>{t.training.emptyState}</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden">
@@ -1397,6 +1870,7 @@ const App = () => {
           <NavItem view={ViewState.SKILLS} icon={Dumbbell} label={t.nav.skills} />
           <NavItem view={ViewState.TACTICS} icon={Layout} label={t.nav.tactics} />
           <NavItem view={ViewState.LEAGUE} icon={Trophy} label={t.nav.league} />
+          <NavItem view={ViewState.SCHOOL} icon={School} label={t.nav.school} />
           <NavItem view={ViewState.TRAINING} icon={BookOpen} label={t.nav.training} />
         </nav>
 
@@ -1434,6 +1908,7 @@ const App = () => {
           <NavItem view={ViewState.SKILLS} icon={Dumbbell} label={t.nav.skills} />
           <NavItem view={ViewState.TACTICS} icon={Layout} label={t.nav.tactics} />
           <NavItem view={ViewState.LEAGUE} icon={Trophy} label={t.nav.league} />
+          <NavItem view={ViewState.SCHOOL} icon={School} label={t.nav.school} />
           <NavItem view={ViewState.TRAINING} icon={BookOpen} label={t.nav.training} />
         </div>
       )}
@@ -1445,6 +1920,7 @@ const App = () => {
           {currentView === ViewState.SKILLS && renderSkills()}
           {currentView === ViewState.TACTICS && renderTactics()}
           {currentView === ViewState.LEAGUE && renderLeague()}
+          {currentView === ViewState.SCHOOL && renderSchool()}
           {currentView === ViewState.TRAINING && renderTraining()}
         </div>
       </main>

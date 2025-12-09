@@ -1,4 +1,5 @@
 
+
 import { SkillCategory, Language, TacticCategory, SkillLibrary } from "./types";
 
 export const SYSTEM_INSTRUCTION = `
@@ -36,6 +37,8 @@ export const TACTIC_CATEGORIES: TacticCategory[] = [
       { id: 'iso_3x3', label: { en: 'Isolation (Clear)', zh: '拉开单打 (3x3 Iso)' }, modes: ['3x3'] },
       { id: 'give_go_3x3', label: { en: 'Give & Go (3x3)', zh: '传切 (3x3)' }, modes: ['3x3'] },
       { id: 'dho_3x3', label: { en: 'Hand Off (3x3)', zh: '手递手 (3x3 DHO)' }, modes: ['3x3'] },
+      { id: 'screen_away_3x3', label: { en: 'Screen Away', zh: '无球掩护 (Screen Away)' }, modes: ['3x3'] },
+      { id: 'backdoor_3x3', label: { en: 'Backdoor Cut', zh: '反跑切入 (Backdoor)' }, modes: ['3x3'] },
     ]
   },
   {
@@ -50,8 +53,6 @@ export const TACTIC_CATEGORIES: TacticCategory[] = [
       { id: 'elevator', label: { en: 'Elevator Doors', zh: '电梯门 (Elevator)' }, modes: ['5v5'] },
       // 3x3 Specifics
       { id: 'split_cut_3x3', label: { en: 'Post Split', zh: '内线分球切入 (Split)' }, modes: ['3x3'] },
-      { id: 'screen_away_3x3', label: { en: 'Screen Away', zh: '无球掩护 (Screen Away)' }, modes: ['3x3'] },
-      { id: 'backdoor_3x3', label: { en: 'Backdoor Cut', zh: '反跑切入 (Backdoor)' }, modes: ['3x3'] },
     ]
   },
   {
@@ -653,6 +654,7 @@ export const TRANSLATIONS = {
       skills: "Skills",
       tactics: "Tactics",
       league: "League Manager",
+      school: "School Manager",
       training: "Training"
     },
     home: {
@@ -736,6 +738,28 @@ export const TRANSLATIONS = {
         undo: "Undo"
       }
     },
+    school: {
+      title: "School Management",
+      createSchool: "Add School",
+      createGrade: "Add Grade",
+      createClass: "Add Class",
+      createStudent: "Add Student",
+      schoolName: "School Name",
+      region: "Region/District",
+      gradeName: "Enrollment Year (Grade)",
+      className: "Class Name",
+      grade: "Grade",
+      studentName: "Student Name",
+      parentName: "Parent/Dad's Name",
+      parentPhone: "Parent Phone",
+      noSchools: "No schools added yet.",
+      noGrades: "No grades/years added.",
+      noClasses: "No classes in this grade.",
+      noStudents: "No students in this class.",
+      age: "Age",
+      height: "Height",
+      dadsCupReady: "Dad's Cup Ready"
+    },
     training: {
       title: "Plan Generator",
       duration: "Duration",
@@ -782,6 +806,7 @@ export const TRANSLATIONS = {
       skills: "篮球技术",
       tactics: "战术板",
       league: "联赛管理",
+      school: "校园管理",
       training: "训练计划"
     },
     home: {
@@ -864,6 +889,28 @@ export const TRANSLATIONS = {
         fouls: "犯规",
         undo: "撤销"
       }
+    },
+    school: {
+      title: "校园管理",
+      createSchool: "添加学校",
+      createGrade: "添加年级",
+      createClass: "添加班级",
+      createStudent: "添加学生",
+      schoolName: "学校名称",
+      region: "区域/行政区",
+      gradeName: "入学年份 (年级)",
+      className: "班级名称",
+      grade: "年级",
+      studentName: "学生姓名",
+      parentName: "家长/父亲姓名",
+      parentPhone: "家长电话",
+      noSchools: "暂无学校信息，请先添加。",
+      noGrades: "该校暂无年级信息。",
+      noClasses: "该年级暂无班级。",
+      noStudents: "该班级暂无学生。",
+      age: "年龄",
+      height: "身高",
+      dadsCupReady: "爸爸杯报名信息已备"
     },
     training: {
       title: "计划生成器",

@@ -1,9 +1,11 @@
 
+
 export enum ViewState {
   HOME = 'HOME',
   SKILLS = 'SKILLS',
   TACTICS = 'TACTICS',
   LEAGUE = 'LEAGUE',
+  SCHOOL = 'SCHOOL',
   TRAINING = 'TRAINING'
 }
 
@@ -148,4 +150,35 @@ export interface ManagedLeague {
   type: '5v5' | '3x3';
   teams: ManagedTeam[];
   matches: ManagedMatch[];
+}
+
+// --- SCHOOL MANAGEMENT TYPES ---
+
+export interface Student {
+  id: string;
+  name: string;
+  age: string;
+  height: string;
+  weight: string;
+  parentName: string; // For Dad's Cup
+  parentPhone: string;
+}
+
+export interface SchoolClass {
+  id: string;
+  name: string; // e.g., "Class 1"
+  students: Student[];
+}
+
+export interface SchoolGrade {
+  id: string;
+  name: string; // e.g., "2022 Entry" or "Grade 3"
+  classes: SchoolClass[];
+}
+
+export interface School {
+  id: string;
+  name: string;
+  region: string; // e.g., "Haidian District"
+  grades: SchoolGrade[];
 }
