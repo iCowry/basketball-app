@@ -1,7 +1,6 @@
 
-
 import React, { useState, useEffect } from 'react';
-import { Layout, Dumbbell, BookOpen, Trophy, PlayCircle, Menu, X, BrainCircuit, Globe, ChevronDown, ChevronRight, Check, Save, Trash2, Plus, Users, ArrowLeft, ClipboardList, Calendar, Play, Circle, Flag, School, GraduationCap, UserPlus, ClipboardCheck, Medal } from 'lucide-react';
+import { Layout, Dumbbell, BookOpen, Trophy, PlayCircle, Menu, X, BrainCircuit, Globe, ChevronDown, ChevronRight, Check, Save, Trash2, Plus, Users, ArrowLeft, ClipboardList, Calendar, Play, Circle, Flag, School, GraduationCap, UserPlus, ClipboardCheck, Medal, Timer, Award, BarChart3, Shuffle, Loader2 } from 'lucide-react';
 import ChatInterface from './components/ChatInterface';
 import TacticsBoard from './components/TacticsBoard';
 import { ViewState, SkillCategory, TacticMode, Language, SavedPlan, SkillItem, ManagedLeague, ManagedTeam, ManagedPlayer, ManagedMatch, MatchPlayerStats, School as SchoolType, SchoolClass, Student, SchoolGrade, DadsCupRegistration } from './types';
@@ -51,6 +50,8 @@ const App = () => {
   // Dad's Cup State
   const [dadsCupRegistrations, setDadsCupRegistrations] = useState<DadsCupRegistration[]>([]);
   const [isDadsCupModalOpen, setIsDadsCupModalOpen] = useState(false);
+  const [dadsLeagueMode, setDadsLeagueMode] = useState<'intra' | 'inter'>('intra'); // 'intra' = Class vs Class, 'inter' = School vs School
+
   // Cascading Dropdown State for Form
   const [formSchoolId, setFormSchoolId] = useState('');
   const [formGradeId, setFormGradeId] = useState('');
@@ -61,7 +62,7 @@ const App = () => {
     phone: '', 
     jersey: '', 
     height: '', 
-    position: 'Forward',
+    position: 'Forward', 
     specialty: '' 
   });
 
@@ -312,6 +313,70 @@ const App = () => {
   };
 
   // --- Dad's Cup Functions ---
+  
+  // NEW: Generate Demo Data for Dad's Cup
+  const generateDadsCupDemoData = () => {
+    if (schools.length === 0) {
+      alert(language === 'en' ? "Please create a school first." : "请先创建一个学校。");
+      return;
+    }
+
+    const demoDadsBase = [
+      { name: language === 'en' ? "Mike Chen" : "陈建国", phone: "13800138000", h: "178cm", pos: "G", spec: language === 'en' ? "3pt Shooter" : "三分射手" },
+      { name: language === 'en' ? "Big John" : "王志强", phone: "13900139000", h: "185cm", pos: "F", spec: language === 'en' ? "Rebounder" : "篮板痴汉" },
+      { name: language === 'en' ? "Coach Li" : "李伟", phone: "13700137000", h: "180cm", pos: "G", spec: language === 'en' ? "Floor General" : "全场指挥" },
+      { name: language === 'en' ? "Tank Zhang" : "张军", phone: "13600136000", h: "192cm", pos: "C", spec: language === 'en' ? "Paint Beast" : "内线巨兽" },
+      { name: language === 'en' ? "Speedy Liu" : "刘勇", phone: "13500135000", h: "175cm", pos: "G", spec: language === 'en' ? "Fast Break" : "快攻反击" },
+      { name: language === 'en' ? "Sniper Yang" : "杨光", phone: "13400134000", h: "182cm", pos: "F", spec: language === 'en' ? "Mid-Range" : "中投靓仔" },
+      { name: language === 'en' ? "Iron Zhao" : "赵刚", phone: "13300133000", h: "188cm", pos: "F", spec: language === 'en' ? "Defense" : "防守大闸" },
+      { name: language === 'en' ? "Flash Sun" : "孙亮", phone: "13200132000", h: "176cm", pos: "G", spec: language === 'en' ? "Steals" : "抢断王" }
+    ];
+
+    // Collect available student slots across ALL schools to enable Inter-school demo
+    const allSlots: {school: SchoolType, grade: SchoolGrade, cls: SchoolClass, student: Student}[] = [];
+    
+    schools.forEach(s => {
+      s.grades.forEach(g => {
+        g.classes.forEach(c => {
+          c.students.forEach(st => {
+            allSlots.push({ school: s, grade: g, cls: c, student: st });
+          });
+        });
+      });
+    });
+
+    if (allSlots.length === 0) {
+       alert("No students found in any school to link dads to.");
+       return;
+    }
+
+    // Generate 12 random dads distributed across schools
+    const newRegistrations: DadsCupRegistration[] = [];
+    for (let i = 0; i < 12; i++) {
+        const slot = allSlots[Math.floor(Math.random() * allSlots.length)];
+        const dadTemplate = demoDadsBase[i % demoDadsBase.length];
+        
+        newRegistrations.push({
+          id: `demo_dad_${Date.now()}_${i}`,
+          schoolName: slot.school.name,
+          gradeName: calculateGradeLevel(slot.grade.name, language), 
+          className: slot.cls.name,
+          studentName: slot.student.name,
+          dadName: `${dadTemplate.name} (${i})`, // Unique names
+          dadPhone: dadTemplate.phone,
+          dadHeight: dadTemplate.h,
+          dadPosition: dadTemplate.pos,
+          dadSpecialty: dadTemplate.spec,
+          jerseyNumber: `${10 + i}`,
+          timestamp: new Date().toLocaleDateString()
+        });
+    }
+
+    const updated = [...dadsCupRegistrations, ...newRegistrations];
+    setDadsCupRegistrations(updated);
+    localStorage.setItem('gemini_dads_cup_registrations', JSON.stringify(updated));
+  };
+
   const registerDad = () => {
     if (!formSchoolId || !formGradeId || !formClassId || !formStudentId || !formDadInfo.name) return;
 
@@ -355,33 +420,31 @@ const App = () => {
   const generateDadsLeague = () => {
     if (dadsCupRegistrations.length === 0) return;
 
-    // 1. Group registrations by unique Class (School + Grade + Class)
     const teamsMap = new Map<string, { name: string, players: ManagedPlayer[] }>();
 
     dadsCupRegistrations.forEach(reg => {
-      // Create a unique key for the group
-      const teamKey = `${reg.schoolName}-${reg.gradeName}-${reg.className}`;
-      
-      if (!teamsMap.has(teamKey)) {
-        teamsMap.set(teamKey, {
-          name: `${reg.schoolName} ${reg.className} 爸道队`, // "Dad Squad"
-          players: []
-        });
+      // MODE: INTRA (Class vs Class)
+      if (dadsLeagueMode === 'intra') {
+        const teamKey = `${reg.schoolName}-${reg.gradeName}-${reg.className}`;
+        if (!teamsMap.has(teamKey)) {
+          teamsMap.set(teamKey, {
+            name: `${reg.schoolName} ${reg.className} Dad Team`, 
+            players: []
+          });
+        }
+        teamsMap.get(teamKey)!.players.push(createManagedPlayerFromReg(reg));
+      } 
+      // MODE: INTER (School vs School)
+      else {
+        const teamKey = `${reg.schoolName}`; // Group by school only
+        if (!teamsMap.has(teamKey)) {
+          teamsMap.set(teamKey, {
+            name: `${reg.schoolName} Representative Team`, 
+            players: []
+          });
+        }
+        teamsMap.get(teamKey)!.players.push(createManagedPlayerFromReg(reg));
       }
-
-      const team = teamsMap.get(teamKey)!;
-      // Map Registration to ManagedPlayer
-      team.players.push({
-        id: `dad_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        name: reg.dadName,
-        number: reg.jerseyNumber || '00',
-        position: reg.dadPosition || 'F',
-        height: reg.dadHeight || '-',
-        weight: '-', 
-        stats: { pts: 0, reb: 0, ast: 0 },
-        // Use Specialty as initial scouting report
-        scoutingReport: reg.dadSpecialty ? `**Specialty**: ${reg.dadSpecialty}` : ''
-      });
     });
 
     // 2. Convert map to array of ManagedTeams
@@ -389,16 +452,21 @@ const App = () => {
       id: `dads_team_${Date.now()}_${index}`,
       name: t.name,
       coach: 'Dad Coach',
-      color: '#ea580c', // Default orange
+      color: index % 2 === 0 ? '#ea580c' : '#3b82f6', // Orange vs Blue defaults
       players: t.players,
       wins: 0,
       losses: 0
     }));
 
+    if (newTeams.length < 2) {
+       alert(language === 'zh' ? "队伍数量不足，无法生成联赛。需要至少2支队伍。" : "Not enough teams to generate a league. Need at least 2.");
+       return;
+    }
+
     // 3. Create the ManagedLeague object
     const newLeague: ManagedLeague = {
       id: `dads_league_${Date.now()}`,
-      name: `Dad's Cup ${new Date().getFullYear()}`,
+      name: `Dad's Cup ${new Date().getFullYear()} (${dadsLeagueMode === 'intra' ? (language === 'zh' ? '校内赛' : 'Intra-School') : (language === 'zh' ? '校际赛' : 'Inter-School')})`,
       season: `${new Date().getFullYear()}`,
       type: '5v5',
       teams: newTeams,
@@ -413,6 +481,19 @@ const App = () => {
     setCurrentView(ViewState.LEAGUE);
     setActiveLeagueId(newLeague.id);
     setActiveLeagueTab('teams');
+  };
+
+  const createManagedPlayerFromReg = (reg: DadsCupRegistration): ManagedPlayer => {
+    return {
+        id: `dad_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: reg.dadName,
+        number: reg.jerseyNumber || '00',
+        position: reg.dadPosition || 'F',
+        height: reg.dadHeight || '-',
+        weight: '-', 
+        stats: { pts: 0, reb: 0, ast: 0 },
+        scoutingReport: reg.dadSpecialty ? `**Specialty**: ${reg.dadSpecialty}` : ''
+      };
   };
 
 
@@ -792,6 +873,19 @@ const App = () => {
     analyzeTactic(name, activeTacticMode, language).then(setTacticAnalysis);
   };
 
+  const handleGeneratePlan = async () => {
+    setIsPlanLoading(true);
+    try {
+      const plan = await generatePlan(trainingConfig, language);
+      setTrainingPlan(plan);
+    } catch (e) {
+      console.error(e);
+      setTrainingPlan('Error generating plan.');
+    } finally {
+      setIsPlanLoading(false);
+    }
+  };
+
   const NavItem = ({ view, icon: Icon, label }: { view: ViewState, icon: any, label: string }) => (
     <button
       onClick={() => {
@@ -1011,621 +1105,6 @@ const App = () => {
     );
   };
 
-  const renderSchool = () => {
-    // Level 4: Student Detail / List (Deepest) - ONLY WHEN IN MANAGEMENT TAB
-    if (activeSchoolTab === 'management' && activeClassId && activeGradeId && activeSchoolId) {
-      const activeSchool = schools.find(s => s.id === activeSchoolId);
-      const activeGrade = activeSchool?.grades?.find(g => g.id === activeGradeId);
-      const activeClass = activeGrade?.classes.find(c => c.id === activeClassId);
-
-      if (!activeClass) return null;
-
-      return (
-        <div className="flex flex-col h-full gap-6">
-           <div className="flex items-center justify-between">
-            <button onClick={() => setActiveClassId(null)} className="flex items-center gap-2 text-slate-400 hover:text-white">
-              <ArrowLeft size={18} /> {t.common.back}
-            </button>
-            <div className="text-slate-500 text-sm">{activeSchool?.name} / {activeGrade?.name}</div>
-          </div>
-
-          <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-xl">
-             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-               <div>
-                 <h2 className="text-2xl font-bold text-white mb-1">{activeClass.name}</h2>
-                 <p className="text-slate-400 text-sm">{activeClass.students.length} Students</p>
-               </div>
-               <button 
-                onClick={() => setIsAddStudentOpen(true)}
-                className="bg-court-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"
-               >
-                 <UserPlus size={18} /> {t.school.createStudent}
-               </button>
-             </div>
-
-             {/* Student List */}
-             <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-slate-300">
-                  <thead className="bg-slate-900/50 text-slate-500 uppercase font-medium">
-                    <tr>
-                      <th className="p-3">{t.school.studentName}</th>
-                      <th className="p-3">{t.school.age}</th>
-                      <th className="p-3">{t.school.height}</th>
-                      <th className="p-3">{t.school.parentName}</th>
-                      <th className="p-3">{t.school.parentPhone}</th>
-                      <th className="p-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-700">
-                     {activeClass.students.length === 0 ? (
-                       <tr><td colSpan={6} className="p-8 text-center text-slate-500">{t.school.noStudents}</td></tr>
-                     ) : (
-                       activeClass.students.map(student => (
-                         <tr key={student.id} className="hover:bg-slate-700/50 transition-colors">
-                            <td className="p-3 font-bold text-white">{student.name}</td>
-                            <td className="p-3">{student.age}</td>
-                            <td className="p-3">{student.height}</td>
-                            <td className="p-3 text-court-orange">{student.parentName || '-'}</td>
-                            <td className="p-3 font-mono">{student.parentPhone || '-'}</td>
-                            <td className="p-3 text-right">
-                              <button 
-                                onClick={() => deleteStudent(activeSchoolId!, activeGradeId!, activeClassId!, student.id)}
-                                className="text-slate-500 hover:text-red-500 p-1"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </td>
-                         </tr>
-                       ))
-                     )}
-                  </tbody>
-                </table>
-             </div>
-          </div>
-
-          {/* Add Student Modal */}
-          {isAddStudentOpen && (
-            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-              <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700">
-                 <h3 className="text-xl font-bold text-white mb-4">{t.school.createStudent}</h3>
-                 <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2">
-                      <label className="block text-xs text-slate-400 mb-1">{t.school.studentName}</label>
-                      <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newStudent.name} onChange={e => setNewStudent({...newStudent, name: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-400 mb-1">{t.school.age}</label>
-                      <input type="number" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newStudent.age} onChange={e => setNewStudent({...newStudent, age: e.target.value})} />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-400 mb-1">{t.school.height}</label>
-                      <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newStudent.height} onChange={e => setNewStudent({...newStudent, height: e.target.value})} />
-                    </div>
-                    
-                    {/* Dad's Cup Fields */}
-                    <div className="col-span-2 border-t border-slate-700 pt-3 mt-1">
-                      <h4 className="text-court-orange text-xs font-bold uppercase mb-2">{t.school.dadsCupReady}</h4>
-                      <label className="block text-xs text-slate-400 mb-1">{t.school.parentName}</label>
-                      <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white mb-3" value={newStudent.parentName} onChange={e => setNewStudent({...newStudent, parentName: e.target.value})} />
-                      
-                      <label className="block text-xs text-slate-400 mb-1">{t.school.parentPhone}</label>
-                      <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newStudent.parentPhone} onChange={e => setNewStudent({...newStudent, parentPhone: e.target.value})} />
-                    </div>
-                 </div>
-                 <div className="flex justify-end gap-3 mt-6">
-                    <button onClick={() => setIsAddStudentOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
-                    <button onClick={addStudent} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600">{t.common.save}</button>
-                 </div>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // Level 3: Grade Detail / Classes List - ONLY WHEN IN MANAGEMENT TAB
-    if (activeSchoolTab === 'management' && activeGradeId && activeSchoolId) {
-      const school = schools.find(s => s.id === activeSchoolId);
-      const grade = school?.grades?.find(g => g.id === activeGradeId);
-      
-      if (!school || !grade) return null;
-
-      return (
-        <div className="flex flex-col h-full gap-6">
-           <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 flex justify-between items-center shadow-lg">
-             <div className="flex items-center gap-4">
-               <button onClick={() => setActiveGradeId(null)} className="text-slate-400 hover:text-white"><ArrowLeft /></button>
-               <div>
-                  <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-                    {grade.name}
-                    <span className="text-lg text-court-orange font-normal bg-slate-900 px-3 py-1 rounded-full border border-slate-700">
-                      {calculateGradeLevel(grade.name, language)}
-                    </span>
-                  </h2>
-                  <p className="text-slate-400 text-sm">{school.name}</p>
-               </div>
-             </div>
-             <button 
-                onClick={() => setIsAddClassOpen(true)}
-                className="bg-court-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"
-               >
-                 <Plus size={18} /> {t.school.createClass}
-               </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-               {grade.classes.map(cls => (
-                 <button
-                    key={cls.id}
-                    onClick={() => setActiveClassId(cls.id)}
-                    className="bg-slate-800 p-4 rounded-xl text-left hover:bg-slate-700 transition-all border border-slate-700 hover:border-court-orange group relative"
-                 >
-                    <div className="font-bold text-white text-lg group-hover:text-court-orange truncate">{cls.name}</div>
-                    <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-900 w-fit px-2 py-1 rounded mt-2">
-                       <Users size={12} /> {cls.students.length}
-                    </div>
-                    <div 
-                      onClick={(e) => { e.stopPropagation(); deleteClass(school.id, grade.id, cls.id); }}
-                      className="absolute top-2 right-2 text-slate-600 hover:text-red-500 p-1"
-                    >
-                      <Trash2 size={14} />
-                    </div>
-                 </button>
-               ))}
-               <button 
-                 onClick={() => setIsAddClassOpen(true)}
-                 className="bg-slate-800/50 border-2 border-dashed border-slate-700 p-4 rounded-xl flex flex-col items-center justify-center text-slate-500 hover:text-court-orange hover:border-court-orange transition-all min-h-[120px]"
-               >
-                 <Plus size={32} />
-                 <span className="text-sm mt-2 font-bold">{t.school.createClass}</span>
-               </button>
-             </div>
-          </div>
-
-           {/* Add Class Modal */}
-           {isAddClassOpen && (
-            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-               <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700">
-                  <h3 className="text-xl font-bold text-white mb-4">{t.school.createClass}</h3>
-                  <div className="space-y-4">
-                     <div>
-                       <label className="block text-sm text-slate-400 mb-1">{t.school.className}</label>
-                       <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newClassName} onChange={e => setNewClassName(e.target.value)} />
-                     </div>
-                  </div>
-                  <div className="flex justify-end gap-3 mt-6">
-                     <button onClick={() => setIsAddClassOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
-                     <button onClick={addClass} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600">{t.common.save}</button>
-                  </div>
-               </div>
-            </div>
-           )}
-        </div>
-      );
-    }
-
-    // Level 2: School Detail / Grade List - ONLY WHEN IN MANAGEMENT TAB
-    if (activeSchoolTab === 'management' && activeSchoolId) {
-      const school = schools.find(s => s.id === activeSchoolId);
-      if (!school) return null;
-
-      return (
-        <div className="flex flex-col h-full gap-6">
-           <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 flex justify-between items-center shadow-lg">
-             <div className="flex items-center gap-4">
-               <button onClick={() => setActiveSchoolId(null)} className="text-slate-400 hover:text-white"><ArrowLeft /></button>
-               <div>
-                  <h2 className="text-2xl font-bold text-white">{school.name}</h2>
-                  <p className="text-slate-400 text-sm">{school.region}</p>
-               </div>
-             </div>
-             <button 
-                onClick={() => setIsAddGradeOpen(true)}
-                className="bg-court-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"
-               >
-                 <Plus size={18} /> {t.school.createGrade}
-               </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-               {(school.grades || []).map(grade => (
-                 <button
-                    key={grade.id}
-                    onClick={() => setActiveGradeId(grade.id)}
-                    className="bg-slate-800 p-4 rounded-xl text-left hover:bg-slate-700 transition-all border border-slate-700 hover:border-court-orange group relative flex items-center justify-between"
-                 >
-                    <div>
-                      <div className="font-bold text-white text-lg group-hover:text-court-orange flex items-center gap-2">
-                        {grade.name}
-                      </div>
-                      <div className="mt-1 inline-block text-xs font-semibold text-slate-300 bg-slate-900/50 px-2 py-0.5 rounded border border-slate-700/50">
-                        {calculateGradeLevel(grade.name, language)}
-                      </div>
-                      <div className="text-sm text-slate-500 mt-2">{grade.classes.length} Classes</div>
-                    </div>
-                    <div 
-                      onClick={(e) => { e.stopPropagation(); deleteGrade(school.id, grade.id); }}
-                      className="text-slate-600 hover:text-red-500 p-2"
-                    >
-                      <Trash2 size={18} />
-                    </div>
-                 </button>
-               ))}
-               {(school.grades || []).length === 0 && (
-                   <div className="col-span-full p-8 text-center text-slate-500 border border-dashed border-slate-700 rounded-xl">
-                      {t.school.noGrades}
-                   </div>
-               )}
-             </div>
-          </div>
-
-           {/* Add Grade Modal */}
-           {isAddGradeOpen && (
-            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-               <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700">
-                  <h3 className="text-xl font-bold text-white mb-4">{t.school.createGrade}</h3>
-                  <div className="space-y-4">
-                     <div>
-                       <label className="block text-sm text-slate-400 mb-1">{t.school.gradeName}</label>
-                       <input type="text" placeholder="e.g. 2022 Entry / Grade 3" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newGradeName} onChange={e => setNewGradeName(e.target.value)} />
-                       <p className="text-xs text-slate-500 mt-1">Tip: Include the year (e.g. "2023") to auto-calculate grade level.</p>
-                     </div>
-                  </div>
-                  <div className="flex justify-end gap-3 mt-6">
-                     <button onClick={() => setIsAddGradeOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
-                     <button onClick={addGrade} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600">{t.common.save}</button>
-                  </div>
-               </div>
-            </div>
-           )}
-        </div>
-      );
-    }
-
-    // Level 1: Main View (School Lists OR Dad's Cup)
-    return (
-      <div className="flex flex-col h-full gap-6">
-         {/* Top Header & Tabs */}
-         <div className="bg-slate-800 p-2 rounded-xl border border-slate-700 flex flex-col md:flex-row justify-between items-center gap-4">
-             <div className="flex p-1 gap-1 bg-slate-900 rounded-lg w-full md:w-auto">
-               <button 
-                  onClick={() => setActiveSchoolTab('management')}
-                  className={`px-4 py-2 rounded-md font-bold text-sm transition-all flex-1 md:flex-none
-                    ${activeSchoolTab === 'management' ? 'bg-court-orange text-white shadow' : 'text-slate-400 hover:text-white'}`}
-               >
-                  {t.school.tabs.management}
-               </button>
-               <button 
-                  onClick={() => setActiveSchoolTab('dadscup')}
-                  className={`px-4 py-2 rounded-md font-bold text-sm transition-all flex-1 md:flex-none
-                    ${activeSchoolTab === 'dadscup' ? 'bg-court-orange text-white shadow' : 'text-slate-400 hover:text-white'}`}
-               >
-                  {t.school.tabs.dadscup}
-               </button>
-             </div>
-             
-             {activeSchoolTab === 'management' && (
-                <button 
-                  onClick={() => setIsAddSchoolOpen(true)}
-                  className="bg-court-orange hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg w-full md:w-auto justify-center"
-                >
-                  <Plus size={18} /> {t.school.createSchool}
-                </button>
-             )}
-         </div>
-
-         {/* Content Area */}
-         <div className="flex-1 overflow-y-auto">
-            {activeSchoolTab === 'management' ? (
-              <div className="space-y-4">
-                  {schools.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-64 text-slate-500 bg-slate-800/50 rounded-xl border border-slate-700 border-dashed">
-                      <School size={48} className="mb-4 opacity-20" />
-                      <p>{t.school.noSchools}</p>
-                    </div>
-                  ) : (
-                    schools.map(school => (
-                        <div key={school.id} className="bg-slate-800 border border-slate-700 rounded-xl p-4 hover:border-slate-500 transition-colors">
-                          <div className="flex justify-between items-start">
-                              <button onClick={() => setActiveSchoolId(school.id)} className="text-left group flex-1">
-                                <h3 className="text-xl font-bold text-white group-hover:text-court-orange transition-colors">{school.name}</h3>
-                                <p className="text-sm text-slate-400 mb-2">{school.region}</p>
-                                <div className="flex gap-4">
-                                    <span className="text-xs bg-slate-900 text-slate-300 px-2 py-1 rounded border border-slate-700 flex items-center gap-1">
-                                      <Flag size={12} /> {(school.grades || []).length} Grades
-                                    </span>
-                                </div>
-                              </button>
-                              <div className="flex items-center gap-2">
-                                <button onClick={() => setActiveSchoolId(school.id)} className="text-sm text-court-orange hover:text-white border border-slate-700 hover:bg-slate-700 px-3 py-1 rounded">Manage</button>
-                                <button onClick={() => deleteSchool(school.id)} className="text-slate-500 hover:text-red-500 p-2"><Trash2 size={18} /></button>
-                              </div>
-                          </div>
-                        </div>
-                    ))
-                  )}
-              </div>
-            ) : (
-              /* DAD'S CUP VIEW */
-              <div className="h-full flex flex-col gap-6">
-                 {/* Hero Banner for Dad's Cup */}
-                 <div className="bg-gradient-to-r from-orange-900 to-slate-900 p-8 rounded-xl border border-orange-900/50 shadow-lg relative overflow-hidden flex flex-col md:flex-row justify-between items-center gap-6">
-                    <div className="relative z-10">
-                       <h2 className="text-3xl font-bold text-white mb-2 italic uppercase tracking-wider flex items-center gap-3">
-                         <Medal className="text-yellow-500" size={32} /> 
-                         {t.school.dadscup.title}
-                       </h2>
-                       <p className="text-orange-200/80">Represent your child's class. Glory awaits!</p>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-3 relative z-10">
-                      <button 
-                        onClick={() => setIsDadsCupModalOpen(true)}
-                        className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white px-8 py-3 rounded-full font-bold shadow-xl transform transition hover:scale-105 flex items-center gap-2"
-                      >
-                        <ClipboardCheck size={20} /> {t.school.dadscup.register}
-                      </button>
-                      
-                      {dadsCupRegistrations.length > 0 && (
-                        <button 
-                          onClick={generateDadsLeague}
-                          className="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-6 py-3 rounded-full font-bold shadow-lg flex items-center gap-2 transition-all hover:border-court-orange hover:text-court-orange"
-                        >
-                          <Trophy size={20} /> {t.school.dadscup.generateLeague}
-                        </button>
-                      )}
-                    </div>
-                    {/* Background Pattern */}
-                    <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '20px 20px'}}></div>
-                 </div>
-
-                 {/* Registration List */}
-                 <div className="flex-1 bg-slate-800 rounded-xl border border-slate-700 overflow-hidden flex flex-col">
-                    <div className="p-4 bg-slate-900/50 border-b border-slate-700 font-bold text-slate-300">
-                       {t.school.dadscup.registered}
-                    </div>
-                    <div className="flex-1 overflow-y-auto">
-                        {dadsCupRegistrations.length === 0 ? (
-                           <div className="flex flex-col items-center justify-center h-full text-slate-500">
-                              <Medal size={48} className="mb-4 opacity-20" />
-                              <p>{t.school.dadscup.noRegistrations}</p>
-                           </div>
-                        ) : (
-                          <table className="w-full text-left text-sm text-slate-300">
-                             <thead className="bg-slate-900 text-slate-500 uppercase font-medium">
-                               <tr>
-                                 <th className="p-4">Dad / Guardian</th>
-                                 <th className="p-4">Child / Class</th>
-                                 <th className="p-4">School</th>
-                                 <th className="p-4">Details</th>
-                                 <th className="p-4 text-center">Jersey #</th>
-                                 <th className="p-4 text-right">Action</th>
-                               </tr>
-                             </thead>
-                             <tbody className="divide-y divide-slate-700">
-                                {dadsCupRegistrations.map(reg => (
-                                   <tr key={reg.id} className="hover:bg-slate-700/50 transition-colors">
-                                      <td className="p-4">
-                                         <div className="font-bold text-white text-base">{reg.dadName}</div>
-                                         <div className="text-xs text-slate-500">{reg.dadPhone}</div>
-                                      </td>
-                                      <td className="p-4">
-                                         <div className="text-court-orange font-medium">{reg.studentName}</div>
-                                         <div className="text-xs text-slate-400">{reg.gradeName} - {reg.className}</div>
-                                      </td>
-                                      <td className="p-4">{reg.schoolName}</td>
-                                      <td className="p-4 text-xs text-slate-400">
-                                         <div>{reg.dadHeight} | {reg.dadPosition}</div>
-                                         <div className="italic text-slate-500">{reg.dadSpecialty}</div>
-                                      </td>
-                                      <td className="p-4 text-center font-mono text-lg font-bold text-slate-200">{reg.jerseyNumber}</td>
-                                      <td className="p-4 text-right">
-                                         <button onClick={() => deleteRegistration(reg.id)} className="text-slate-600 hover:text-red-500"><Trash2 size={18} /></button>
-                                      </td>
-                                   </tr>
-                                ))}
-                             </tbody>
-                          </table>
-                        )}
-                    </div>
-                 </div>
-              </div>
-            )}
-         </div>
-
-         {/* Add School Modal */}
-         {isAddSchoolOpen && (
-            <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-               <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md border border-slate-700 shadow-2xl">
-                  <h3 className="text-xl font-bold text-white mb-4">{t.school.createSchool}</h3>
-                  <div className="space-y-4">
-                     <div>
-                       <label className="block text-sm text-slate-400 mb-1">{t.school.schoolName}</label>
-                       <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newSchoolName} onChange={e => setNewSchoolName(e.target.value)} />
-                     </div>
-                     <div>
-                       <label className="block text-sm text-slate-400 mb-1">{t.school.region}</label>
-                       <input type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" value={newSchoolRegion} onChange={e => setNewSchoolRegion(e.target.value)} />
-                     </div>
-                  </div>
-                  <div className="flex justify-end gap-3 mt-6">
-                     <button onClick={() => setIsAddSchoolOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
-                     <button onClick={addSchool} className="px-4 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600">{t.common.save}</button>
-                  </div>
-               </div>
-            </div>
-         )}
-
-         {/* Dad's Cup Registration Modal */}
-         {isDadsCupModalOpen && (
-            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-               <div className="bg-slate-800 rounded-xl p-6 w-full max-w-lg border border-slate-600 shadow-2xl max-h-[90vh] overflow-y-auto">
-                  <div className="border-b border-slate-700 pb-4 mb-4">
-                     <h3 className="text-2xl font-bold text-white flex items-center gap-2">
-                        <Medal className="text-court-orange" /> {t.school.dadscup.register}
-                     </h3>
-                     <p className="text-slate-400 text-sm mt-1">Join the ultimate dad league.</p>
-                  </div>
-                  
-                  <div className="space-y-5">
-                     {/* 1. School Selection */}
-                     <div>
-                        <label className="block text-sm font-bold text-slate-300 mb-2">{t.school.dadscup.form.selectSchool}</label>
-                        <select 
-                           className="w-full bg-slate-900 border border-slate-600 rounded p-3 text-white focus:border-court-orange outline-none"
-                           value={formSchoolId}
-                           onChange={(e) => {
-                              setFormSchoolId(e.target.value);
-                              setFormGradeId('');
-                              setFormClassId('');
-                              setFormStudentId('');
-                           }}
-                        >
-                           <option value="">-- Select --</option>
-                           {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
-                     </div>
-
-                     {/* 2. Grade Selection */}
-                     <div>
-                        <label className="block text-sm font-bold text-slate-300 mb-2">{t.school.dadscup.form.selectGrade}</label>
-                        <select 
-                           className="w-full bg-slate-900 border border-slate-600 rounded p-3 text-white focus:border-court-orange outline-none disabled:opacity-50"
-                           value={formGradeId}
-                           disabled={!formSchoolId}
-                           onChange={(e) => {
-                              setFormGradeId(e.target.value);
-                              setFormClassId('');
-                              setFormStudentId('');
-                           }}
-                        >
-                           <option value="">-- Select --</option>
-                           {formSchoolId && schools.find(s => s.id === formSchoolId)?.grades.map(g => (
-                              <option key={g.id} value={g.id}>{g.name} ({calculateGradeLevel(g.name, language)})</option>
-                           ))}
-                        </select>
-                     </div>
-
-                     {/* 3. Class Selection */}
-                     <div>
-                        <label className="block text-sm font-bold text-slate-300 mb-2">{t.school.dadscup.form.selectClass}</label>
-                        <select 
-                           className="w-full bg-slate-900 border border-slate-600 rounded p-3 text-white focus:border-court-orange outline-none disabled:opacity-50"
-                           value={formClassId}
-                           disabled={!formGradeId}
-                           onChange={(e) => {
-                              setFormClassId(e.target.value);
-                              setFormStudentId('');
-                           }}
-                        >
-                           <option value="">-- Select --</option>
-                           {formGradeId && schools.find(s => s.id === formSchoolId)?.grades.find(g => g.id === formGradeId)?.classes.map(c => (
-                              <option key={c.id} value={c.id}>{c.name}</option>
-                           ))}
-                        </select>
-                     </div>
-
-                     {/* 4. Student Selection */}
-                     <div>
-                        <label className="block text-sm font-bold text-slate-300 mb-2">{t.school.dadscup.form.selectStudent}</label>
-                        <select 
-                           className="w-full bg-slate-900 border border-slate-600 rounded p-3 text-white focus:border-court-orange outline-none disabled:opacity-50"
-                           value={formStudentId}
-                           disabled={!formClassId}
-                           onChange={(e) => setFormStudentId(e.target.value)}
-                        >
-                           <option value="">-- Select --</option>
-                           {formClassId && schools.find(s => s.id === formSchoolId)?.grades.find(g => g.id === formGradeId)?.classes.find(c => c.id === formClassId)?.students.map(st => (
-                              <option key={st.id} value={st.id}>{st.name}</option>
-                           ))}
-                        </select>
-                        <p className="text-xs text-slate-500 mt-1">Don't see your child? Add them in School Management first.</p>
-                     </div>
-
-                     {/* 5. Dad Info */}
-                     <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700/50 mt-4">
-                        <h4 className="text-court-orange font-bold text-sm uppercase mb-3 border-b border-slate-700/50 pb-2">
-                           {t.school.dadscup.form.dadInfo}
-                        </h4>
-                        <div className="grid grid-cols-2 gap-4">
-                           <div className="col-span-2">
-                              <label className="block text-xs text-slate-400 mb-1">{t.school.dadscup.form.dadName}</label>
-                              <input 
-                                 type="text" 
-                                 className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white"
-                                 value={formDadInfo.name}
-                                 onChange={e => setFormDadInfo({...formDadInfo, name: e.target.value})}
-                              />
-                           </div>
-                           <div>
-                              <label className="block text-xs text-slate-400 mb-1">{t.school.dadscup.form.dadPhone}</label>
-                              <input 
-                                 type="text" 
-                                 className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white"
-                                 value={formDadInfo.phone}
-                                 onChange={e => setFormDadInfo({...formDadInfo, phone: e.target.value})}
-                              />
-                           </div>
-                           <div>
-                              <label className="block text-xs text-slate-400 mb-1">{t.school.dadscup.form.jersey}</label>
-                              <input 
-                                 type="text" 
-                                 className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white"
-                                 placeholder="#"
-                                 value={formDadInfo.jersey}
-                                 onChange={e => setFormDadInfo({...formDadInfo, jersey: e.target.value})}
-                              />
-                           </div>
-                           
-                           {/* New Fields */}
-                           <div>
-                              <label className="block text-xs text-slate-400 mb-1">{language === 'zh' ? '身高 (cm)' : 'Height (cm)'}</label>
-                              <input 
-                                 type="text" 
-                                 className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white"
-                                 placeholder="e.g. 180"
-                                 value={formDadInfo.height}
-                                 onChange={e => setFormDadInfo({...formDadInfo, height: e.target.value})}
-                              />
-                           </div>
-                           <div>
-                              <label className="block text-xs text-slate-400 mb-1">{language === 'zh' ? '场上位置' : 'Position'}</label>
-                              <select 
-                                 className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white"
-                                 value={formDadInfo.position}
-                                 onChange={e => setFormDadInfo({...formDadInfo, position: e.target.value})}
-                              >
-                                <option value="Guard">Guard (后卫)</option>
-                                <option value="Forward">Forward (前锋)</option>
-                                <option value="Center">Center (中锋)</option>
-                              </select>
-                           </div>
-                           <div className="col-span-2">
-                              <label className="block text-xs text-slate-400 mb-1">{language === 'zh' ? '特长 / 风格' : 'Specialty / Style'}</label>
-                              <input 
-                                 type="text" 
-                                 className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white"
-                                 placeholder={language === 'zh' ? "例如: 三分投手, 篮板痴汉" : "e.g. 3-Point Shooter, Rebounder"}
-                                 value={formDadInfo.specialty}
-                                 onChange={e => setFormDadInfo({...formDadInfo, specialty: e.target.value})}
-                              />
-                           </div>
-                        </div>
-                     </div>
-                  </div>
-
-                  <div className="flex justify-end gap-3 mt-8">
-                     <button onClick={() => setIsDadsCupModalOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">{t.common.cancel}</button>
-                     <button onClick={registerDad} className="px-6 py-2 bg-court-orange text-white rounded font-bold hover:bg-orange-600 shadow-lg">{t.school.dadscup.form.submit}</button>
-                  </div>
-               </div>
-            </div>
-         )}
-      </div>
-    );
-  };
-
   const renderTactics = () => {
     const selectedCategory = TACTIC_CATEGORIES.find(c => c.id === activeCategoryId);
     const availableItems = selectedCategory?.items.filter(item => item.modes.includes(activeTacticMode)) || [];
@@ -1729,6 +1208,7 @@ const App = () => {
   const renderLeague = () => {
     const activeLeague = leagues.find(l => l.id === activeLeagueId);
     
+    // ... (rest of League rendering logic)
     // Scout Report Modal
     if (activePlayerId) {
       const activeTeam = activeLeague?.teams.find(t => t.players.some(p => p.id === activePlayerId));
@@ -1753,15 +1233,15 @@ const App = () => {
                <div className="grid grid-cols-3 gap-4">
                  <div className="bg-slate-700/50 p-4 rounded-xl text-center">
                     <div className="text-3xl font-bold text-white">{player?.stats.pts}</div>
-                    <div className="text-xs uppercase tracking-wider text-slate-400">PPG</div>
+                    <div className="text-xs uppercase tracking-wider text-slate-400">Total PTS</div>
                  </div>
                  <div className="bg-slate-700/50 p-4 rounded-xl text-center">
                     <div className="text-3xl font-bold text-white">{player?.stats.reb}</div>
-                    <div className="text-xs uppercase tracking-wider text-slate-400">RPG</div>
+                    <div className="text-xs uppercase tracking-wider text-slate-400">Total REB</div>
                  </div>
                  <div className="bg-slate-700/50 p-4 rounded-xl text-center">
                     <div className="text-3xl font-bold text-white">{player?.stats.ast}</div>
-                    <div className="text-xs uppercase tracking-wider text-slate-400">APG</div>
+                    <div className="text-xs uppercase tracking-wider text-slate-400">Total AST</div>
                  </div>
                </div>
 
@@ -1898,7 +1378,7 @@ const App = () => {
            {activeLeagueTab === 'teams' && (
              <div className="space-y-6">
                <div className="flex justify-between items-center">
-                 <h3 className="text-lg font-bold text-slate-300">Teams</h3>
+                 <h3 className="text-lg font-bold text-slate-300">Teams & Players</h3>
                  <button onClick={() => setIsAddTeamOpen(true)} className="text-court-orange hover:text-white text-sm font-bold flex items-center gap-1">
                    <Plus size={16} /> {t.league.createTeam}
                  </button>
@@ -1911,7 +1391,13 @@ const App = () => {
                     {activeLeague.teams.map(team => (
                       <div key={team.id} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
                         <div className="bg-slate-900/50 p-3 border-b border-slate-700 flex justify-between items-center">
-                           <h4 className="font-bold text-white">{team.name}</h4>
+                           <div>
+                             <h4 className="font-bold text-white text-lg">{team.name}</h4>
+                             <div className="text-xs text-slate-400 flex gap-2">
+                               <span>W: {team.wins}</span>
+                               <span>L: {team.losses}</span>
+                             </div>
+                           </div>
                            <div className="flex items-center gap-2">
                              <button onClick={() => { setActiveTeamId(team.id); setIsAddPlayerOpen(true); }} className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded border border-slate-600">
                                + Player
@@ -1929,7 +1415,8 @@ const App = () => {
                                    <th className="p-2">#</th>
                                    <th className="p-2">Name</th>
                                    <th className="p-2">Pos</th>
-                                   <th className="p-2 text-right">Actions</th>
+                                   <th className="p-2 text-right">Season Stats</th>
+                                   <th className="p-2 text-right"></th>
                                  </tr>
                                </thead>
                                <tbody className="divide-y divide-slate-700/50">
@@ -1938,6 +1425,9 @@ const App = () => {
                                      <td className="p-2 font-mono text-court-orange">{p.number}</td>
                                      <td className="p-2 font-medium text-white">{p.name}</td>
                                      <td className="p-2 text-slate-400">{p.position}</td>
+                                     <td className="p-2 text-right text-slate-400 font-mono">
+                                       {p.stats.pts}p / {p.stats.reb}r / {p.stats.ast}a
+                                     </td>
                                      <td className="p-2 text-right flex justify-end gap-2">
                                        <button onClick={() => handleGenerateScout(p)} className="text-court-accent hover:text-white" title="Scout Report"><BrainCircuit size={14} /></button>
                                        <button onClick={() => deletePlayer(activeLeague.id, team.id, p.id)} className="text-slate-600 hover:text-red-500"><Trash2 size={14} /></button>
@@ -1979,7 +1469,7 @@ const App = () => {
                              </div>
                              <div className="flex flex-col items-center px-4 bg-slate-900 rounded-lg py-2 min-w-[100px]">
                                <div className="text-2xl font-bold font-mono text-court-orange">{m.homeScore} - {m.awayScore}</div>
-                               <div className="text-xs text-slate-500 uppercase font-bold">{m.status}</div>
+                               <div className={`text-xs uppercase font-bold px-2 py-0.5 rounded ${m.status === 'Live' ? 'bg-green-900 text-green-400' : 'text-slate-500'}`}>{m.status}</div>
                              </div>
                              <div className="text-left flex-1">
                                <div className="font-bold text-white text-lg">{away?.name || 'Unknown'}</div>
@@ -1989,13 +1479,18 @@ const App = () => {
                           <div className="flex items-center gap-3 w-full md:w-auto justify-center">
                              {m.status !== 'Final' ? (
                                <button 
-                                 onClick={() => setActiveMatchId(m.id)} // Open Live Tracker Logic (Simplified here)
-                                 className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded font-bold text-sm flex items-center gap-2"
+                                 onClick={() => setActiveMatchId(m.id)} 
+                                 className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded font-bold text-sm flex items-center gap-2 shadow-lg"
                                >
-                                 <PlayCircle size={16} /> {m.status === 'Live' ? 'Resume' : 'Start'}
+                                 <PlayCircle size={16} /> {m.status === 'Live' ? 'Resume' : 'Start Game'}
                                </button>
                              ) : (
-                               <span className="px-4 py-2 bg-slate-700 text-slate-400 rounded font-bold text-sm">Final</span>
+                               <button 
+                                onClick={() => setActiveMatchId(m.id)}
+                                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded font-bold text-sm flex items-center gap-1 transition-colors border border-slate-600"
+                               >
+                                <BarChart3 size={14}/> View Stats
+                               </button>
                              )}
                           </div>
                        </div>
@@ -2089,236 +1584,527 @@ const App = () => {
     );
   };
 
-  const renderTraining = () => {
-    const handleGenerate = async () => {
-      setIsPlanLoading(true);
-      try {
-        const plan = await generatePlan(trainingConfig, language);
-        setTrainingPlan(plan);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setIsPlanLoading(false);
-      }
-    };
+  const renderSchool = () => {
+    // Dad's Cup Tab
+    if (activeSchoolTab === 'dadscup') {
+      return (
+         <div className="flex flex-col h-full gap-6">
+            <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 flex flex-col md:flex-row justify-between items-center shadow-lg bg-gradient-to-r from-slate-800 to-slate-900 gap-4">
+               <div>
+                  <h2 className="text-3xl font-bold text-white mb-2 flex items-center gap-3">
+                    <Trophy className="text-yellow-500" size={32} />
+                    {t.school.dadscup.title}
+                  </h2>
+                  <p className="text-slate-400 mb-2">Join the ultimate basketball tournament for basketball dads!</p>
+                  
+                  {/* MODE SWITCHER */}
+                  <div className="flex items-center gap-2 bg-slate-900/50 p-1 rounded-lg border border-slate-700 w-fit">
+                     <button 
+                        onClick={() => setDadsLeagueMode('intra')}
+                        className={`px-3 py-1.5 rounded text-xs font-bold transition-colors ${dadsLeagueMode === 'intra' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                     >
+                       {language === 'zh' ? '班级联赛 (校内)' : 'Intra-School (Class)'}
+                     </button>
+                     <button 
+                        onClick={() => setDadsLeagueMode('inter')}
+                        className={`px-3 py-1.5 rounded text-xs font-bold transition-colors ${dadsLeagueMode === 'inter' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                     >
+                       {language === 'zh' ? '校际联赛 (对外)' : 'Inter-School'}
+                     </button>
+                  </div>
+               </div>
+               
+               <div className="flex flex-col items-end gap-2">
+                  <div className="flex gap-2">
+                    <button 
+                        onClick={generateDadsCupDemoData}
+                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg font-bold shadow-lg flex items-center gap-2 border border-slate-600 text-xs"
+                    >
+                        <UserPlus size={16} /> {t.school.dadscup.generateDemo}
+                    </button>
+                    <button 
+                        onClick={() => setIsDadsCupModalOpen(true)}
+                        className="px-4 py-2 bg-court-orange hover:bg-orange-600 text-white rounded-lg font-bold shadow-lg flex items-center gap-2 text-xs"
+                    >
+                        <ClipboardCheck size={16} /> {t.school.dadscup.register}
+                    </button>
+                  </div>
+                  <button 
+                    onClick={generateDadsLeague}
+                    disabled={dadsCupRegistrations.length < 2} 
+                    className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-bold shadow-lg flex items-center justify-center gap-2"
+                  >
+                    <Medal size={20} /> 
+                    {language === 'zh' ? `生成${dadsLeagueMode === 'intra' ? '班级' : '校际'}联赛` : `Generate ${dadsLeagueMode === 'intra' ? 'Class' : 'School'} League`}
+                  </button>
+               </div>
+            </div>
 
+            <div className="bg-slate-800 rounded-xl border border-slate-700 flex-1 overflow-hidden flex flex-col">
+               <div className="p-4 bg-slate-900/50 border-b border-slate-700 font-bold text-slate-300 flex justify-between">
+                  <span>{t.school.dadscup.registered} ({dadsCupRegistrations.length})</span>
+                  <span className="text-xs font-normal text-indigo-400 border border-indigo-900 bg-indigo-900/20 px-2 py-0.5 rounded">
+                     {dadsLeagueMode === 'intra' ? (language === 'zh' ? '当前模式: 班级对抗' : 'Mode: Class vs Class') : (language === 'zh' ? '当前模式: 学校对抗' : 'Mode: School vs School')}
+                  </span>
+               </div>
+               <div className="flex-1 overflow-y-auto p-4">
+                  {dadsCupRegistrations.length === 0 ? (
+                    <div className="text-center py-12 text-slate-500">
+                       <Users size={48} className="mx-auto mb-4 opacity-20" />
+                       <p>{t.school.dadscup.noRegistrations}</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                       {dadsCupRegistrations.map(reg => (
+                         <div key={reg.id} className="bg-slate-700/30 p-4 rounded-lg border border-slate-700 flex flex-col gap-2 relative group hover:border-indigo-500/50 transition-colors">
+                            <div className="flex justify-between items-start">
+                               <div>
+                                  <h4 className="font-bold text-white text-lg">{reg.dadName}</h4>
+                                  <div className="text-xs text-court-orange font-bold uppercase">{reg.dadPosition} • {reg.dadHeight}</div>
+                               </div>
+                               <div className="text-2xl font-mono font-bold text-slate-500">#{reg.jerseyNumber}</div>
+                            </div>
+                            <div className="mt-2 pt-2 border-t border-slate-700/50 text-xs text-slate-400 space-y-1">
+                               <p className={`flex items-center gap-2 ${dadsLeagueMode === 'inter' ? 'text-white font-bold' : ''}`}><School size={12}/> {reg.schoolName}</p>
+                               <p className={`flex items-center gap-2 ${dadsLeagueMode === 'intra' ? 'text-white font-bold' : ''}`}><GraduationCap size={12}/> {reg.gradeName} • {reg.className}</p>
+                               <p className="flex items-center gap-2"><Users size={12}/> Child: {reg.studentName}</p>
+                               {reg.dadSpecialty && <p className="text-court-accent italic">"{reg.dadSpecialty}"</p>}
+                            </div>
+                            <button 
+                              onClick={() => deleteRegistration(reg.id)}
+                              className="absolute top-2 right-2 p-1 text-slate-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X size={16} />
+                            </button>
+                         </div>
+                       ))}
+                    </div>
+                  )}
+               </div>
+            </div>
+
+            {/* Registration Modal */}
+            {isDadsCupModalOpen && (
+              <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+                 <div className="bg-slate-800 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-700 shadow-2xl">
+                    <div className="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-900 sticky top-0">
+                       <h3 className="text-xl font-bold text-white">{t.school.dadscup.title}</h3>
+                       <button onClick={() => setIsDadsCupModalOpen(false)}><X className="text-slate-400 hover:text-white" /></button>
+                    </div>
+                    <div className="p-6 space-y-6">
+                       {/* Step 1: Link Child */}
+                       <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700/50">
+                          <h4 className="text-court-orange font-bold mb-4 uppercase text-xs tracking-wider">Step 1: Link Student</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <select className="bg-slate-800 border border-slate-600 rounded p-2 text-white" value={formSchoolId} onChange={e => { setFormSchoolId(e.target.value); setFormGradeId(''); }}>
+                               <option value="">{t.school.dadscup.form.selectSchool}</option>
+                               {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                             </select>
+                             <select className="bg-slate-800 border border-slate-600 rounded p-2 text-white" value={formGradeId} onChange={e => { setFormGradeId(e.target.value); setFormClassId(''); }} disabled={!formSchoolId}>
+                               <option value="">{t.school.dadscup.form.selectGrade}</option>
+                               {schools.find(s => s.id === formSchoolId)?.grades.map(g => <option key={g.id} value={g.id}>{calculateGradeLevel(g.name, language)} ({g.name})</option>)}
+                             </select>
+                             <select className="bg-slate-800 border border-slate-600 rounded p-2 text-white" value={formClassId} onChange={e => { setFormClassId(e.target.value); setFormStudentId(''); }} disabled={!formGradeId}>
+                               <option value="">{t.school.dadscup.form.selectClass}</option>
+                               {schools.find(s => s.id === formSchoolId)?.grades.find(g => g.id === formGradeId)?.classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                             </select>
+                             <select className="bg-slate-800 border border-slate-600 rounded p-2 text-white" value={formStudentId} onChange={e => setFormStudentId(e.target.value)} disabled={!formClassId}>
+                               <option value="">{t.school.dadscup.form.selectStudent}</option>
+                               {schools.find(s => s.id === formSchoolId)?.grades.find(g => g.id === formGradeId)?.classes.find(c => c.id === formClassId)?.students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                             </select>
+                          </div>
+                       </div>
+
+                       {/* Step 2: Dad Info */}
+                       <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700/50">
+                          <h4 className="text-court-orange font-bold mb-4 uppercase text-xs tracking-wider">Step 2: Dad's Profile</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <input className="bg-slate-800 border border-slate-600 rounded p-2 text-white" placeholder={t.school.dadscup.form.dadName} value={formDadInfo.name} onChange={e => setFormDadInfo({...formDadInfo, name: e.target.value})} />
+                             <input className="bg-slate-800 border border-slate-600 rounded p-2 text-white" placeholder={t.school.dadscup.form.dadPhone} value={formDadInfo.phone} onChange={e => setFormDadInfo({...formDadInfo, phone: e.target.value})} />
+                             <div className="flex gap-2">
+                               <input className="flex-1 bg-slate-800 border border-slate-600 rounded p-2 text-white" placeholder="Height (cm)" value={formDadInfo.height} onChange={e => setFormDadInfo({...formDadInfo, height: e.target.value})} />
+                               <input className="w-24 bg-slate-800 border border-slate-600 rounded p-2 text-white" placeholder="# Jersey" value={formDadInfo.jersey} onChange={e => setFormDadInfo({...formDadInfo, jersey: e.target.value})} />
+                             </div>
+                             <select className="bg-slate-800 border border-slate-600 rounded p-2 text-white" value={formDadInfo.position} onChange={e => setFormDadInfo({...formDadInfo, position: e.target.value})}>
+                               <option value="Guard">Guard (G)</option>
+                               <option value="Forward">Forward (F)</option>
+                               <option value="Center">Center (C)</option>
+                             </select>
+                             <input className="col-span-1 md:col-span-2 bg-slate-800 border border-slate-600 rounded p-2 text-white" placeholder="Specialty (e.g. 3pt shooter, lockdown defense)" value={formDadInfo.specialty} onChange={e => setFormDadInfo({...formDadInfo, specialty: e.target.value})} />
+                          </div>
+                       </div>
+                    </div>
+                    <div className="p-6 border-t border-slate-700 bg-slate-900 flex justify-end gap-3">
+                       <button onClick={() => setIsDadsCupModalOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white">Cancel</button>
+                       <button 
+                         onClick={registerDad}
+                         disabled={!formStudentId || !formDadInfo.name}
+                         className="px-6 py-2 bg-court-orange hover:bg-orange-600 disabled:opacity-50 text-white rounded font-bold"
+                       >
+                         {t.school.dadscup.form.submit}
+                       </button>
+                    </div>
+                 </div>
+              </div>
+            )}
+         </div>
+      );
+    }
+
+    // Management Tab View
     return (
       <div className="flex flex-col h-full gap-6">
-         <div className="flex justify-center bg-slate-800 p-1 rounded-lg w-fit mx-auto border border-slate-700">
-            <button 
-              onClick={() => setActiveTab('generator')}
-              className={`px-6 py-2 rounded-md font-bold text-sm transition-all ${activeTab === 'generator' ? 'bg-court-orange text-white shadow' : 'text-slate-400 hover:text-white'}`}
-            >
-              {t.training.title}
-            </button>
-            <button 
-              onClick={() => setActiveTab('saved')}
-              className={`px-6 py-2 rounded-md font-bold text-sm transition-all ${activeTab === 'saved' ? 'bg-court-orange text-white shadow' : 'text-slate-400 hover:text-white'}`}
-            >
-              {t.training.savedPlans}
-            </button>
+        <div className="flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700">
+            <h2 className="text-2xl font-bold text-white flex items-center gap-2"><School size={24} className="text-court-orange"/> {t.school.title}</h2>
+            <div className="flex bg-slate-800 rounded-lg p-1">
+              <button onClick={() => setActiveSchoolTab('management')} className={`px-4 py-1.5 rounded text-sm font-bold ${activeSchoolTab === 'management' ? 'bg-court-orange text-white' : 'text-slate-400'}`}>{t.school.tabs.management}</button>
+              <button onClick={() => setActiveSchoolTab('dadscup')} className={`px-4 py-1.5 rounded text-sm font-bold ${activeSchoolTab === 'dadscup' ? 'bg-court-orange text-white' : 'text-slate-400'}`}>{t.school.tabs.dadscup}</button>
+            </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1 overflow-hidden">
+           {/* Column 1: Schools */}
+           <div className="bg-slate-800 rounded-xl border border-slate-700 flex flex-col overflow-hidden">
+              <div className="p-3 bg-slate-900/50 border-b border-slate-700 flex justify-between items-center">
+                 <span className="font-bold text-slate-300">Schools</span>
+                 <button onClick={() => setIsAddSchoolOpen(true)}><Plus size={16} className="text-court-orange"/></button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                 {schools.map(s => (
+                   <div 
+                      key={s.id} 
+                      onClick={() => { setActiveSchoolId(s.id); setActiveGradeId(null); setActiveClassId(null); }}
+                      className={`p-3 rounded-lg cursor-pointer flex justify-between items-center group ${activeSchoolId === s.id ? 'bg-court-orange text-white' : 'hover:bg-slate-700 text-slate-300'}`}
+                   >
+                      <div>
+                        <div className="font-bold">{s.name}</div>
+                        <div className="text-xs opacity-70">{s.region}</div>
+                      </div>
+                      <button onClick={(e) => { e.stopPropagation(); deleteSchool(s.id); }} className="opacity-0 group-hover:opacity-100 hover:text-red-300"><Trash2 size={14} /></button>
+                   </div>
+                 ))}
+              </div>
+           </div>
+
+           {/* Column 2: Grades */}
+           <div className="bg-slate-800 rounded-xl border border-slate-700 flex flex-col overflow-hidden">
+               <div className="p-3 bg-slate-900/50 border-b border-slate-700 flex justify-between items-center">
+                 <span className="font-bold text-slate-300">Grades / Years</span>
+                 <button onClick={() => setIsAddGradeOpen(true)} disabled={!activeSchoolId} className="disabled:opacity-20"><Plus size={16} className="text-court-orange"/></button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                 {!activeSchoolId ? <div className="text-xs text-slate-500 text-center p-4">Select School</div> : 
+                   schools.find(s => s.id === activeSchoolId)?.grades.map(g => (
+                    <div 
+                      key={g.id} 
+                      onClick={() => { setActiveGradeId(g.id); setActiveClassId(null); }}
+                      className={`p-3 rounded-lg cursor-pointer flex justify-between items-center group ${activeGradeId === g.id ? 'bg-slate-600 text-white' : 'hover:bg-slate-700 text-slate-300'}`}
+                   >
+                      <div>
+                        <div className="font-bold">{calculateGradeLevel(g.name, language)}</div>
+                        <div className="text-xs opacity-70">Entry: {g.name}</div>
+                      </div>
+                      <button onClick={(e) => { e.stopPropagation(); deleteGrade(activeSchoolId, g.id); }} className="opacity-0 group-hover:opacity-100 hover:text-red-300"><Trash2 size={14} /></button>
+                   </div>
+                 ))}
+              </div>
+           </div>
+
+           {/* Column 3: Classes */}
+           <div className="bg-slate-800 rounded-xl border border-slate-700 flex flex-col overflow-hidden">
+               <div className="p-3 bg-slate-900/50 border-b border-slate-700 flex justify-between items-center">
+                 <span className="font-bold text-slate-300">Classes</span>
+                 <button onClick={() => setIsAddClassOpen(true)} disabled={!activeGradeId} className="disabled:opacity-20"><Plus size={16} className="text-court-orange"/></button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                 {!activeGradeId ? <div className="text-xs text-slate-500 text-center p-4">Select Grade</div> : 
+                   schools.find(s => s.id === activeSchoolId)?.grades.find(g => g.id === activeGradeId)?.classes.map(c => (
+                    <div 
+                      key={c.id} 
+                      onClick={() => setActiveClassId(c.id)}
+                      className={`p-3 rounded-lg cursor-pointer flex justify-between items-center group ${activeClassId === c.id ? 'bg-slate-600 text-white' : 'hover:bg-slate-700 text-slate-300'}`}
+                   >
+                      <div className="font-bold">{c.name}</div>
+                      <button onClick={(e) => { e.stopPropagation(); deleteClass(activeSchoolId!, activeGradeId!, c.id); }} className="opacity-0 group-hover:opacity-100 hover:text-red-300"><Trash2 size={14} /></button>
+                   </div>
+                 ))}
+              </div>
+           </div>
+
+           {/* Column 4: Students */}
+           <div className="bg-slate-800 rounded-xl border border-slate-700 flex flex-col overflow-hidden">
+               <div className="p-3 bg-slate-900/50 border-b border-slate-700 flex justify-between items-center">
+                 <span className="font-bold text-slate-300">Students</span>
+                 <button onClick={() => setIsAddStudentOpen(true)} disabled={!activeClassId} className="disabled:opacity-20"><Plus size={16} className="text-court-orange"/></button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                 {!activeClassId ? <div className="text-xs text-slate-500 text-center p-4">Select Class</div> : 
+                   schools.find(s => s.id === activeSchoolId)?.grades.find(g => g.id === activeGradeId)?.classes.find(c => c.id === activeClassId)?.students.map(st => (
+                    <div key={st.id} className="bg-slate-900 border border-slate-700 p-3 rounded-lg group relative">
+                       <div className="font-bold text-white text-sm">{st.name}</div>
+                       <div className="text-xs text-slate-400 mt-1">
+                          {st.age} yrs • {st.height} • {st.weight}
+                       </div>
+                       <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                          <Users size={10} /> {st.parentName}
+                       </div>
+                       <button onClick={() => deleteStudent(activeSchoolId!, activeGradeId!, activeClassId!, st.id)} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-500"><Trash2 size={14} /></button>
+                    </div>
+                 ))}
+              </div>
+           </div>
+        </div>
+
+        {/* Modals for School Management */}
+        {isAddSchoolOpen && (
+           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+              <div className="bg-slate-800 p-6 rounded-xl w-full max-w-sm border border-slate-700">
+                 <h3 className="text-white font-bold mb-4">{t.school.createSchool}</h3>
+                 <input className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white mb-2" placeholder="School Name" value={newSchoolName} onChange={e => setNewSchoolName(e.target.value)} />
+                 <input className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white mb-4" placeholder="Region" value={newSchoolRegion} onChange={e => setNewSchoolRegion(e.target.value)} />
+                 <div className="flex justify-end gap-2">
+                    <button onClick={() => setIsAddSchoolOpen(false)} className="px-3 py-1 text-slate-400">Cancel</button>
+                    <button onClick={addSchool} className="px-3 py-1 bg-court-orange text-white rounded font-bold">Add</button>
+                 </div>
+              </div>
+           </div>
+        )}
+
+        {isAddGradeOpen && (
+           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+              <div className="bg-slate-800 p-6 rounded-xl w-full max-w-sm border border-slate-700">
+                 <h3 className="text-white font-bold mb-4">{t.school.createGrade}</h3>
+                 <input className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white mb-4" placeholder="Enrollment Year (e.g. 2022)" value={newGradeName} onChange={e => setNewGradeName(e.target.value)} />
+                 <div className="flex justify-end gap-2">
+                    <button onClick={() => setIsAddGradeOpen(false)} className="px-3 py-1 text-slate-400">Cancel</button>
+                    <button onClick={addGrade} className="px-3 py-1 bg-court-orange text-white rounded font-bold">Add</button>
+                 </div>
+              </div>
+           </div>
+        )}
+
+        {isAddClassOpen && (
+           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+              <div className="bg-slate-800 p-6 rounded-xl w-full max-w-sm border border-slate-700">
+                 <h3 className="text-white font-bold mb-4">{t.school.createClass}</h3>
+                 <input className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white mb-4" placeholder="Class Name (e.g. 101班)" value={newClassName} onChange={e => setNewClassName(e.target.value)} />
+                 <div className="flex justify-end gap-2">
+                    <button onClick={() => setIsAddClassOpen(false)} className="px-3 py-1 text-slate-400">Cancel</button>
+                    <button onClick={addClass} className="px-3 py-1 bg-court-orange text-white rounded font-bold">Add</button>
+                 </div>
+              </div>
+           </div>
+        )}
+
+        {isAddStudentOpen && (
+           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+              <div className="bg-slate-800 p-6 rounded-xl w-full max-w-sm border border-slate-700">
+                 <h3 className="text-white font-bold mb-4">{t.school.createStudent}</h3>
+                 <input className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white mb-2" placeholder="Student Name" value={newStudent.name} onChange={e => setNewStudent({...newStudent, name: e.target.value})} />
+                 <div className="flex gap-2 mb-2">
+                    <input className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" placeholder="Age" value={newStudent.age} onChange={e => setNewStudent({...newStudent, age: e.target.value})} />
+                    <input className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white" placeholder="Height" value={newStudent.height} onChange={e => setNewStudent({...newStudent, height: e.target.value})} />
+                 </div>
+                 <input className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white mb-2" placeholder="Weight" value={newStudent.weight} onChange={e => setNewStudent({...newStudent, weight: e.target.value})} />
+                 <input className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white mb-2" placeholder="Parent Name" value={newStudent.parentName} onChange={e => setNewStudent({...newStudent, parentName: e.target.value})} />
+                 <input className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white mb-4" placeholder="Parent Phone" value={newStudent.parentPhone} onChange={e => setNewStudent({...newStudent, parentPhone: e.target.value})} />
+                 <div className="flex justify-end gap-2">
+                    <button onClick={() => setIsAddStudentOpen(false)} className="px-3 py-1 text-slate-400">Cancel</button>
+                    <button onClick={addStudent} className="px-3 py-1 bg-court-orange text-white rounded font-bold">Add</button>
+                 </div>
+              </div>
+           </div>
+        )}
+     </div>
+  );
+  }; // <--- Fixed missing closing brace
+
+  const renderTraining = () => {
+    return (
+      <div className="flex flex-col h-full gap-6">
+         <div className="flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700">
+             <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+               <ClipboardList className="text-court-orange" /> {t.training.title}
+             </h2>
+             <div className="flex bg-slate-900 rounded-lg p-1">
+               <button onClick={() => setActiveTab('generator')} className={`px-4 py-1.5 rounded text-sm font-bold ${activeTab === 'generator' ? 'bg-court-orange text-white' : 'text-slate-400'}`}>Generator</button>
+               <button onClick={() => setActiveTab('saved')} className={`px-4 py-1.5 rounded text-sm font-bold ${activeTab === 'saved' ? 'bg-court-orange text-white' : 'text-slate-400'}`}>{t.training.savedPlans}</button>
+             </div>
          </div>
 
          {activeTab === 'generator' ? (
-           <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden">
-              {/* Configuration Panel */}
-              <div className="w-full lg:w-1/3 bg-slate-800 p-6 rounded-xl border border-slate-700 flex flex-col gap-6 shadow-xl h-fit">
-                 <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                   <ClipboardList className="text-court-orange" /> Configure Plan
-                 </h2>
-                 
-                 <div>
-                   <label className="block text-sm font-bold text-slate-400 mb-2">{t.training.duration}</label>
+           <div className="flex flex-col lg:flex-row gap-6 flex-1 overflow-hidden">
+             {/* Config Panel */}
+             <div className="lg:w-1/3 bg-slate-800 rounded-xl border border-slate-700 p-6 flex flex-col gap-6 h-fit">
+                <div>
+                   <label className="text-sm font-bold text-slate-400 mb-2 block">{t.training.duration}</label>
                    <select 
-                     className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white focus:border-court-orange outline-none"
+                     className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
                      value={trainingConfig.days}
                      onChange={(e) => setTrainingConfig({...trainingConfig, days: e.target.value})}
                    >
-                     <option value="1">{t.training.daysOptions['1']}</option>
-                     <option value="7">{t.training.daysOptions['7']}</option>
-                     <option value="30">{t.training.daysOptions['30']}</option>
+                     {Object.entries(t.training.daysOptions).map(([k, v]) => (
+                       <option key={k} value={k}>{v}</option>
+                     ))}
                    </select>
-                 </div>
-
-                 <div>
-                   <label className="block text-sm font-bold text-slate-400 mb-2">{t.training.level}</label>
+                </div>
+                <div>
+                   <label className="text-sm font-bold text-slate-400 mb-2 block">{t.training.level}</label>
                    <select 
-                     className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white focus:border-court-orange outline-none"
+                     className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
                      value={trainingConfig.level}
                      onChange={(e) => setTrainingConfig({...trainingConfig, level: e.target.value})}
                    >
-                     <option value="Beginner">{t.training.levelOptions['Beginner']}</option>
-                     <option value="Intermediate">{t.training.levelOptions['Intermediate']}</option>
-                     <option value="Advanced">{t.training.levelOptions['Advanced']}</option>
+                     {Object.entries(t.training.levelOptions).map(([k, v]) => (
+                       <option key={k} value={k}>{v}</option>
+                     ))}
                    </select>
-                 </div>
+                </div>
+                <div>
+                   <label className="text-sm font-bold text-slate-400 mb-2 block">{t.training.focus}</label>
+                   <input 
+                     className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
+                     value={trainingConfig.focus}
+                     onChange={(e) => setTrainingConfig({...trainingConfig, focus: e.target.value})}
+                     placeholder="e.g. Shooting, Defense, Conditioning"
+                   />
+                </div>
+                <div>
+                   <label className="text-sm font-bold text-slate-400 mb-2 block">{t.training.age}</label>
+                   <input 
+                     className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white"
+                     type="number"
+                     value={trainingConfig.age}
+                     onChange={(e) => setTrainingConfig({...trainingConfig, age: e.target.value})}
+                   />
+                </div>
+                
+                <button 
+                  onClick={handleGeneratePlan}
+                  disabled={isPlanLoading}
+                  className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all"
+                >
+                  {isPlanLoading ? (
+                    <>
+                      <Loader2 className="animate-spin" /> {t.training.generatingButton}
+                    </>
+                  ) : (
+                    <>
+                      <BrainCircuit /> {t.training.generateButton}
+                    </>
+                  )}
+                </button>
+             </div>
 
-                 <div className="grid grid-cols-2 gap-4">
-                   <div>
-                      <label className="block text-sm font-bold text-slate-400 mb-2">{t.training.focus}</label>
-                      <input 
-                        type="text" 
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white focus:border-court-orange outline-none"
-                        value={trainingConfig.focus}
-                        onChange={(e) => setTrainingConfig({...trainingConfig, focus: e.target.value})}
-                        placeholder="e.g. Shooting"
-                      />
-                   </div>
-                   <div>
-                      <label className="block text-sm font-bold text-slate-400 mb-2">{t.training.age}</label>
-                      <input 
-                        type="number" 
-                        className="w-full bg-slate-900 border border-slate-600 rounded-lg p-3 text-white focus:border-court-orange outline-none"
-                        value={trainingConfig.age}
-                        onChange={(e) => setTrainingConfig({...trainingConfig, age: e.target.value})}
-                      />
-                   </div>
-                 </div>
-
-                 <button 
-                   onClick={handleGenerate}
-                   disabled={isPlanLoading}
-                   className="mt-4 bg-court-orange hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-xl font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-2"
-                 >
-                   {isPlanLoading ? (
-                     <>
-                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                       {t.training.generatingButton}
-                     </>
-                   ) : (
-                     <>
-                       <BrainCircuit /> {t.training.generateButton}
-                     </>
-                   )}
-                 </button>
-              </div>
-
-              {/* Result Panel */}
-              <div className="flex-1 bg-slate-800 rounded-xl border border-slate-700 shadow-xl overflow-hidden flex flex-col">
-                 {trainingPlan ? (
-                   <>
-                     <div className="bg-slate-900 p-4 border-b border-slate-700 flex justify-between items-center">
-                        <h3 className="font-bold text-white">Generated Plan</h3>
-                        <button onClick={handleSavePlan} className="flex items-center gap-2 text-court-orange hover:text-white font-bold text-sm px-3 py-1 rounded hover:bg-slate-800 transition-colors">
-                          <Save size={16} /> {t.training.saveButton}
-                        </button>
-                     </div>
-                     <div className="flex-1 overflow-y-auto p-6 bg-slate-800/50">
-                        <div className="prose prose-invert max-w-none">
-                           <ReactMarkdown>{trainingPlan}</ReactMarkdown>
-                        </div>
-                     </div>
-                   </>
-                 ) : (
-                   <div className="flex-1 flex flex-col items-center justify-center text-slate-500 p-8 text-center">
-                      <BookOpen size={64} className="mb-4 opacity-20" />
-                      <p className="text-lg">{t.training.emptyState}</p>
-                   </div>
-                 )}
-              </div>
+             {/* Result Panel */}
+             <div className="flex-1 bg-slate-800 rounded-xl border border-slate-700 p-6 flex flex-col overflow-hidden shadow-lg relative">
+                {trainingPlan ? (
+                  <>
+                    <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-4">
+                      <h3 className="text-xl font-bold text-white">AI Generated Plan</h3>
+                      <button onClick={handleSavePlan} className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2">
+                        <Save size={16} /> {t.training.saveButton}
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto prose prose-invert prose-sm max-w-none">
+                      <ReactMarkdown>{trainingPlan}</ReactMarkdown>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-slate-500 opacity-50">
+                    <ClipboardList size={64} className="mb-4" />
+                    <p className="text-lg text-center max-w-sm">{t.training.emptyState}</p>
+                  </div>
+                )}
+             </div>
            </div>
          ) : (
-           /* Saved Plans View */
-           <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl flex-1 overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
-                 {savedPlans.length === 0 ? (
-                    <div className="col-span-full py-12 text-center text-slate-500">{t.training.noSaved}</div>
-                 ) : (
-                    savedPlans.map(plan => (
-                      <div key={plan.id} className="bg-slate-900 border border-slate-700 rounded-xl p-6 hover:border-court-orange transition-all group flex flex-col h-full">
-                         <div className="flex justify-between items-start mb-4">
-                            <div className="bg-orange-900/30 text-court-orange p-3 rounded-lg">
-                               <Dumbbell size={24} />
-                            </div>
-                            <button onClick={() => handleDeletePlan(plan.id)} className="text-slate-600 hover:text-red-500">
-                               <Trash2 size={18} />
-                            </button>
-                         </div>
-                         <h3 className="text-xl font-bold text-white mb-2 line-clamp-2">{plan.title}</h3>
-                         <div className="flex items-center gap-2 text-xs text-slate-500 mb-4">
-                            <Calendar size={12} /> {plan.date}
-                         </div>
-                         <div className="mt-auto pt-4 border-t border-slate-800">
-                            <button 
-                              onClick={() => {
-                                setTrainingPlan(plan.content);
-                                setActiveTab('generator');
-                              }}
-                              className="w-full bg-slate-800 hover:bg-slate-700 text-white py-2 rounded font-medium text-sm transition-colors"
-                            >
-                              View & Edit
-                            </button>
-                         </div>
-                      </div>
-                    ))
-                 )}
-              </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto">
+              {savedPlans.length === 0 ? (
+                <div className="col-span-full py-12 text-center text-slate-500">
+                   {t.training.noSaved}
+                </div>
+              ) : (
+                savedPlans.map(plan => (
+                  <div key={plan.id} className="bg-slate-800 p-6 rounded-xl border border-slate-700 flex flex-col shadow-lg">
+                     <div className="flex justify-between items-start mb-4">
+                       <div>
+                         <h3 className="font-bold text-white text-lg line-clamp-1">{plan.title}</h3>
+                         <div className="text-xs text-slate-500">{plan.date}</div>
+                       </div>
+                       <button onClick={() => handleDeletePlan(plan.id)} className="text-slate-600 hover:text-red-500"><Trash2 size={16} /></button>
+                     </div>
+                     <div className="flex-1 bg-slate-900/50 p-3 rounded-lg text-xs text-slate-400 overflow-hidden relative mb-4 h-32">
+                        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-900/90 pointer-events-none"></div>
+                        <ReactMarkdown>{plan.content}</ReactMarkdown>
+                     </div>
+                     <button 
+                       onClick={() => { setTrainingPlan(plan.content); setActiveTab('generator'); }}
+                       className="w-full bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg font-bold text-sm"
+                     >
+                       View / Load
+                     </button>
+                  </div>
+                ))
+              )}
            </div>
          )}
       </div>
     );
   };
 
+  // --- Main Layout ---
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden">
-      {/* Sidebar Navigation (Desktop) */}
-      <aside className="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-800 p-4">
-        <div className="flex items-center gap-2 mb-8 px-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg"></div>
-          <span className="text-xl font-bold tracking-tight text-white">Gemini<span className="text-court-orange">Courtside</span></span>
+    <div className="flex h-screen bg-court-dark text-slate-200 overflow-hidden font-sans">
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 bg-black/80 z-40 lg:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>
+      )}
+
+      {/* Sidebar Navigation */}
+      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800 transform transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+          <div className="w-8 h-8 bg-court-orange rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/20">
+            <Trophy className="text-white" size={20} />
+          </div>
+          <span className="font-bold text-xl tracking-tight text-white">Gemini<span className="text-court-orange">Courtside</span></span>
         </div>
-        
-        <nav className="flex-1 space-y-2">
-          <NavItem view={ViewState.HOME} icon={BrainCircuit} label={t.nav.aiCoach} />
+
+        <nav className="p-4 space-y-2">
+          <NavItem view={ViewState.HOME} icon={Layout} label="Home" />
           <NavItem view={ViewState.SKILLS} icon={Dumbbell} label={t.nav.skills} />
-          <NavItem view={ViewState.TACTICS} icon={Layout} label={t.nav.tactics} />
+          <NavItem view={ViewState.TACTICS} icon={BookOpen} label={t.nav.tactics} />
           <NavItem view={ViewState.LEAGUE} icon={Trophy} label={t.nav.league} />
           <NavItem view={ViewState.SCHOOL} icon={School} label={t.nav.school} />
-          <NavItem view={ViewState.TRAINING} icon={BookOpen} label={t.nav.training} />
+          <NavItem view={ViewState.TRAINING} icon={ClipboardList} label={t.nav.training} />
         </nav>
 
-        <div className="mt-auto">
-          <button 
-            onClick={toggleLanguage}
-            className="flex items-center gap-2 text-sm text-slate-400 hover:text-white p-2 w-full rounded hover:bg-slate-800 transition-colors mb-4"
-          >
-            <Globe size={16} />
-            {language === 'en' ? 'Switch to 中文' : '切换到 English'}
-          </button>
-          <div className="p-4 bg-slate-800/50 rounded-lg text-xs text-slate-500">
-            {t.common.footer}
-          </div>
+        <div className="absolute bottom-0 w-full p-4 border-t border-slate-800">
+           <button 
+             onClick={toggleLanguage}
+             className="flex items-center justify-center gap-2 w-full bg-slate-800 hover:bg-slate-700 text-slate-300 py-2 rounded-lg transition-colors"
+           >
+             <Globe size={16} /> {language === 'en' ? 'Switch to 中文' : 'Switch to English'}
+           </button>
+           <div className="text-center mt-4 text-xs text-slate-600">
+             v2.0 • {t.common.footer}
+           </div>
         </div>
       </aside>
 
-      {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 w-full bg-slate-900 border-b border-slate-800 z-50 flex justify-between items-center p-4">
-        <span className="font-bold text-lg">Gemini<span className="text-court-orange">Courtside</span></span>
-        <div className="flex gap-4 items-center">
-          <button onClick={toggleLanguage} className="text-slate-300">
-             <Globe size={20} />
-          </button>
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-white">
-            {isMobileMenuOpen ? <X /> : <Menu />}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile Menu Overlay */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 bg-slate-900 z-40 pt-20 px-4 space-y-2">
-          <NavItem view={ViewState.HOME} icon={BrainCircuit} label={t.nav.aiCoach} />
-          <NavItem view={ViewState.SKILLS} icon={Dumbbell} label={t.nav.skills} />
-          <NavItem view={ViewState.TACTICS} icon={Layout} label={t.nav.tactics} />
-          <NavItem view={ViewState.LEAGUE} icon={Trophy} label={t.nav.league} />
-          <NavItem view={ViewState.SCHOOL} icon={School} label={t.nav.school} />
-          <NavItem view={ViewState.TRAINING} icon={BookOpen} label={t.nav.training} />
-        </div>
-      )}
-
       {/* Main Content Area */}
-      <main className="flex-1 overflow-hidden relative pt-16 md:pt-0">
-        <div className="h-full p-4 md:p-8 max-w-7xl mx-auto">
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+        {/* Mobile Header */}
+        <header className="lg:hidden h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 z-30">
+           <button onClick={() => setIsMobileMenuOpen(true)} className="text-white p-2">
+             <Menu size={24} />
+           </button>
+           <span className="font-bold text-white">Gemini Courtside</span>
+           <div className="w-8"></div> {/* Spacer */}
+        </header>
+
+        {/* View Container */}
+        <div className="flex-1 overflow-hidden p-4 lg:p-6 bg-slate-900/50">
           {currentView === ViewState.HOME && renderHome()}
           {currentView === ViewState.SKILLS && renderSkills()}
           {currentView === ViewState.TACTICS && renderTactics()}
