@@ -182,3 +182,18 @@ export interface School {
   region: string; // e.g., "Haidian District"
   grades: SchoolGrade[];
 }
+
+export interface DadsCupRegistration {
+  id: string;
+  schoolName: string;
+  gradeName: string;
+  className: string;
+  studentName: string;
+  dadName: string;
+  dadPhone: string;
+  dadHeight: string;
+  dadPosition: string;
+  dadSpecialty: string;
+  jerseyNumber: string;
+  timestamp: string;
+}

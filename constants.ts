@@ -854,7 +854,29 @@ export const TRANSLATIONS = {
       noStudents: "No students in this class.",
       age: "Age",
       height: "Height",
-      dadsCupReady: "Dad's Cup Ready"
+      dadsCupReady: "Dad's Cup Ready",
+      tabs: {
+        management: "School Management",
+        dadscup: "Dad's Cup Tournament"
+      },
+      dadscup: {
+        title: "Dad's Cup Tournament",
+        register: "Register Team",
+        registered: "Registered Participants",
+        generateLeague: "Create League from Teams",
+        form: {
+          selectSchool: "Select School",
+          selectGrade: "Select Grade",
+          selectClass: "Select Class",
+          selectStudent: "Select Student (Child)",
+          dadInfo: "Dad / Guardian Info",
+          dadName: "Dad's Name",
+          dadPhone: "Phone Number",
+          jersey: "Preferred Jersey #",
+          submit: "Sign Up"
+        },
+        noRegistrations: "No dads registered yet. Be the first!"
+      }
     },
     training: {
       title: "Plan Generator",
@@ -1006,7 +1028,29 @@ export const TRANSLATIONS = {
       noStudents: "该班级暂无学生。",
       age: "年龄",
       height: "身高",
-      dadsCupReady: "爸爸杯报名信息已备"
+      dadsCupReady: "爸爸杯报名信息已备",
+      tabs: {
+        management: "学校管理",
+        dadscup: "爸爸杯篮球赛"
+      },
+      dadscup: {
+        title: "爸爸杯篮球赛 - 报名系统",
+        register: "我要报名",
+        registered: "已报名选手",
+        generateLeague: "一键生成爸爸杯联赛",
+        form: {
+          selectSchool: "选择学校",
+          selectGrade: "选择年级",
+          selectClass: "选择班级",
+          selectStudent: "选择学生 (您的孩子)",
+          dadInfo: "家长/爸爸信息",
+          dadName: "爸爸姓名",
+          dadPhone: "联系电话",
+          jersey: "期望球衣号码",
+          submit: "提交报名"
+        },
+        noRegistrations: "暂无报名信息。快来成为第一个吧！"
+      }
     },
     training: {
       title: "计划生成器",
