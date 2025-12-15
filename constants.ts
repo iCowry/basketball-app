@@ -78,6 +78,22 @@ export const SKILL_LIBRARY: SkillLibrary = {
       label: { en: 'Shooting', zh: '投篮技术' },
       skills: [
         {
+          id: 'beef_form',
+          label: { en: 'Form Shooting (B.E.E.F)', zh: '基础投篮姿势 (B.E.E.F)' },
+          description: {
+            en: 'The absolute foundation of shooting mechanics. Perfect for rookies to build muscle memory close to the basket.',
+            zh: '投篮机制的绝对基础。非常适合初学者在篮下建立肌肉记忆。'
+          },
+          steps: {
+            en: ['Balance: Feet shoulder-width, knees bent.', 'Eyes: Focused on the target (rim hooks).', 'Elbow: Under the ball, forming an L-shape.', 'Follow-through: Snap wrist, hold the "goose neck".'],
+            zh: ['平衡 (Balance)：双脚与肩同宽，屈膝。', '视线 (Eyes)：专注于目标（篮筐挂钩）。', '肘部 (Elbow)：在球下方，呈L形。', '跟随 (Follow-through)：压腕，保持"鹅颈"手型。']
+          },
+          mistakes: {
+            en: ['Elbow sticking out (Chicken wing).', 'Palm touching the ball (should be finger pads).', 'Not holding the follow-through.'],
+            zh: ['肘部外翻（鸡翅膀）。', '手掌心触球（应用指根和指尖）。', '出手后立即缩手。']
+          }
+        },
+        {
           id: 'jump_shot',
           label: { en: 'Jump Shot', zh: '跳投' },
           description: {
@@ -144,63 +160,41 @@ export const SKILL_LIBRARY: SkillLibrary = {
       ]
     },
     {
-      id: 'finishing',
-      label: { en: 'Finishing', zh: '终结技术' },
-      skills: [
-        {
-          id: 'layup',
-          label: { en: 'Layup', zh: '上篮' },
-          description: {
-            en: 'High percentage shot near the rim, usually off the backboard.',
-            zh: '篮下高命中率得分手段，通常利用篮板。'
-          },
-          steps: {
-            en: ['Protect the ball.', 'Jump off inside foot, shoot with outside hand.', 'Aim for the top corner of the small box.'],
-            zh: ['保护球。', '内侧脚起跳，外侧手出手。', '瞄准篮板小方框的上角。']
-          },
-          mistakes: {
-            en: ['Jumping forward instead of up.', 'Not using the backboard.'],
-            zh: ['向前冲跳而不是向上跳。', '不使用擦板。']
-          }
-        },
-        {
-          id: 'floater',
-          label: { en: 'Floater', zh: '抛投' },
-          description: {
-            en: 'High-arcing shot to score over tall defenders without getting too close.',
-            zh: '高弧度投篮，用于在不靠近高大防守者的情况下得分。'
-          },
-          steps: {
-            en: ['Jump off one or two feet.', 'Release ball high.', 'Soft touch, no follow through needed.'],
-            zh: ['单脚或双脚起跳。', '高点出手。', '手感柔和，不需要完整的压腕跟随。']
-          },
-          mistakes: {
-            en: ['Shooting too hard (brick).', 'Low release point.'],
-            zh: ['力量太大。', '出手点太低。']
-          }
-        },
-        {
-          id: 'euro_step',
-          label: { en: 'Euro Step', zh: '欧洲步' },
-          description: {
-            en: 'Deceptive move involving lateral steps to evade a defender.',
-            zh: '通过左右大幅度横移来避开防守者的欺骗性步法。'
-          },
-          steps: {
-            en: ['Fake one direction with first step.', 'Bring ball high or low across body.', 'Step hard in opposite direction for finish.'],
-            zh: ['第一步向一侧做假动作。', '将球从高处或低处横移保护。', '第二步向反方向大幅跨出终结。']
-          },
-          mistakes: {
-            en: ['Moving too slow.', 'Exposing the ball to the defender.'],
-            zh: ['动作太慢。', '球暴露给防守者。']
-          }
-        }
-      ]
-    },
-    {
       id: 'dribbling',
       label: { en: 'Dribbling', zh: '运球控球' },
       skills: [
+        {
+          id: 'ball_familiarity',
+          label: { en: 'Ball Familiarity', zh: '球性熟悉 (Ball Familiarity)' },
+          description: {
+            en: 'Essential rookie drills to get comfortable with the ball before dribbling.',
+            zh: '初学者在运球前适应球感的必要练习。'
+          },
+          steps: {
+            en: ['Ball Slaps: Slap the ball hard to wake up hands.', 'Body Wraps: Move ball around head, waist, and knees without dropping.', 'Finger Taps: Tap ball rapidly between fingertips with straight arms.'],
+            zh: ['大力拍球：用力拍打球以唤醒手部神经。', '身体绕球：环绕头、腰、膝盖转球，不掉球。', '指尖拨球：手臂伸直，用指尖快速来回拨球。']
+          },
+          mistakes: {
+            en: ['Using palms instead of fingertips.', 'Looking down at the ball.', 'Moving too slowly.'],
+            zh: ['用手掌而不是指尖。', '低头看球。', '动作太慢。']
+          }
+        },
+        {
+          id: 'speed_dribble',
+          label: { en: 'Speed Dribble', zh: '推进运球 (Speed Dribble)' },
+          description: {
+            en: 'Dribbling while running to advance the ball up the court quickly.',
+            zh: '在奔跑中运球，用于快速推进过半场。'
+          },
+          steps: {
+            en: ['Push the ball out in front of you.', 'Dribble waist to chest high.', 'Run naturally behind the ball.', 'Keep head up.'],
+            zh: ['将球推向身体前方。', '运球高度在腰部到胸部之间。', '在球后方自然奔跑。', '保持抬头。']
+          },
+          mistakes: {
+            en: ['Dribbling too close to feet (tripping).', 'Dribbling too high (losing control).'],
+            zh: ['运球离脚太近（绊倒）。', '运球太高（失控）。']
+          }
+        },
         {
           id: 'crossover',
           label: { en: 'Crossover', zh: '变向 (Crossover)' },
@@ -271,6 +265,38 @@ export const SKILL_LIBRARY: SkillLibrary = {
       id: 'footwork',
       label: { en: 'Footwork', zh: '脚步技术' },
       skills: [
+         {
+          id: 'jump_stop',
+          label: { en: 'Jump Stop', zh: '急停 (Jump Stop)' },
+          description: {
+            en: 'A controlled two-foot landing to stop momentum without traveling. Crucial for rookies.',
+            zh: '受控的双脚同时着地，在不走步的情况下停止冲刺。初学者必备。'
+          },
+          steps: {
+            en: ['Run/Dribble forward.', 'Hop slightly and land on BOTH feet simultaneously.', 'Knees bent, butt down (Chair sit).', 'Protect ball (Chin it).'],
+            zh: ['向前跑动/运球。', '轻微跳起，双脚**同时**着地。', '屈膝，臀部下沉（坐椅子）。', '护球（收至下巴）。']
+          },
+          mistakes: {
+            en: ['Landing 1-2 (Travel risk).', 'Leaning forward (Off balance).', 'Straight legs (Injury risk).'],
+            zh: ['双脚先后着地（易走步）。', '身体前倾（失去平衡）。', '膝盖直立（受伤风险）。']
+          }
+        },
+        {
+          id: 'pivoting',
+          label: { en: 'Pivoting', zh: '转身/轴心脚 (Pivoting)' },
+          description: {
+            en: 'Rotating on one foot (pivot foot) to protect the ball or create space without traveling.',
+            zh: '以一只脚（轴心脚）为轴旋转，在不走步的情况下保护球或创造空间。'
+          },
+          steps: {
+            en: ['Keep pivot foot GLUED to the floor.', 'Step with the other foot.', 'Stay low.', 'Front Pivot: Step forward. Reverse Pivot: Drop step backward.'],
+            zh: ['轴心脚像钉子一样钉在地上。', '移动另一只脚。', '保持低重心。', '前转身：向前迈步。后转身：向后撤步。']
+          },
+          mistakes: {
+            en: ['Lifting the pivot foot (Travel).', 'Standing up tall.', 'Exposing the ball.'],
+            zh: ['抬起轴心脚（走步）。', '站得太直。', '暴露球的位置。']
+          }
+        },
         {
           id: 'triple_threat',
           label: { en: 'Triple Threat', zh: '三威胁' },
@@ -339,6 +365,76 @@ export const SKILL_LIBRARY: SkillLibrary = {
           mistakes: {
             en: ['Bouncing too close to thrower.', 'Not stepping into pass.'],
             zh: ['击地点离传球人太近。', '传球时未向前迈步。']
+          }
+        },
+        {
+          id: 'overhead_pass',
+          label: { en: 'Overhead Pass', zh: '头上传球' },
+          description: {
+            en: 'Passing from above the forehead. Useful for passing over defenders or long outlets.',
+            zh: '从额头上方传球。适用于越过防守者或长传快攻。'
+          },
+          steps: {
+            en: ['Ball held above forehead (not behind head).', 'Step forward.', 'Snap wrists and fingers forward.'],
+            zh: ['球举在额头上方（不要放到脑后）。', '向前迈步。', '手腕和手指用力向前甩出。']
+          },
+          mistakes: {
+            en: ['Bringing ball behind head (takes too long, easy steal).', 'Crossing feet.'],
+            zh: ['把球放到脑后（太慢，容易被断）。', '脚步交叉。']
+          }
+        }
+      ]
+    },
+    {
+      id: 'finishing',
+      label: { en: 'Finishing', zh: '终结技术' },
+      skills: [
+        {
+          id: 'layup',
+          label: { en: 'Layup', zh: '上篮' },
+          description: {
+            en: 'High percentage shot near the rim, usually off the backboard.',
+            zh: '篮下高命中率得分手段，通常利用篮板。'
+          },
+          steps: {
+            en: ['Protect the ball.', 'Jump off inside foot, shoot with outside hand.', 'Aim for the top corner of the small box.'],
+            zh: ['保护球。', '内侧脚起跳，外侧手出手。', '瞄准篮板小方框的上角。']
+          },
+          mistakes: {
+            en: ['Jumping forward instead of up.', 'Not using the backboard.'],
+            zh: ['向前冲跳而不是向上跳。', '不使用擦板。']
+          }
+        },
+        {
+          id: 'floater',
+          label: { en: 'Floater', zh: '抛投' },
+          description: {
+            en: 'High-arcing shot to score over tall defenders without getting too close.',
+            zh: '高弧度投篮，用于在不靠近高大防守者的情况下得分。'
+          },
+          steps: {
+            en: ['Jump off one or two feet.', 'Release ball high.', 'Soft touch, no follow through needed.'],
+            zh: ['单脚或双脚起跳。', '高点出手。', '手感柔和，不需要完整的压腕跟随。']
+          },
+          mistakes: {
+            en: ['Shooting too hard (brick).', 'Low release point.'],
+            zh: ['力量太大。', '出手点太低。']
+          }
+        },
+        {
+          id: 'euro_step',
+          label: { en: 'Euro Step', zh: '欧洲步' },
+          description: {
+            en: 'Deceptive move involving lateral steps to evade a defender.',
+            zh: '通过左右大幅度横移来避开防守者的欺骗性步法。'
+          },
+          steps: {
+            en: ['Fake one direction with first step.', 'Bring ball high or low across body.', 'Step hard in opposite direction for finish.'],
+            zh: ['第一步向一侧做假动作。', '将球从高处或低处横移保护。', '第二步向反方向大幅跨出终结。']
+          },
+          mistakes: {
+            en: ['Moving too slow.', 'Exposing the ball to the defender.'],
+            zh: ['动作太慢。', '球暴露给防守者。']
           }
         }
       ]
